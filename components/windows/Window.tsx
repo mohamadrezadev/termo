@@ -32,10 +32,10 @@ export default function Window({
   const window = windows.find(w => w.id === id);
 
   useEffect(() => {
-    if (windowRef.current && window) {
+    if (windowRef.current && window && windowRef.current.style) {
       windowRef.current.style.zIndex = window.zIndex.toString();
     }
-  }, [window?.zIndex]);
+  }, [window?.zIndex, windowRef.current]);
 
   if (!window || !window.isOpen) {
     return null;
