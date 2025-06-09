@@ -24,7 +24,8 @@ import {
   Settings,
   Monitor,
   RotateCcw,
-  Languages
+  Languages,
+  Grid3X3
 } from 'lucide-react';
 
 export default function TopMenuBar() {
@@ -34,6 +35,7 @@ export default function TopMenuBar() {
     windows, 
     toggleWindow, 
     resetLayout,
+    calculateGridLayout,
     currentProject 
   } = useAppStore();
   const t = translations[language];
@@ -51,6 +53,10 @@ export default function TopMenuBar() {
       }
     };
     input.click();
+  };
+
+  const handleAutoArrange = () => {
+    calculateGridLayout();
   };
 
   return (
@@ -147,6 +153,10 @@ export default function TopMenuBar() {
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleAutoArrange}>
+              <Grid3X3 className="w-4 h-4 mr-2" />
+              Auto Arrange
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={resetLayout}>
               <RotateCcw className="w-4 h-4 mr-2" />
               {t.resetLayout}

@@ -9,6 +9,7 @@ export interface WindowState {
   position: { x: number; y: number };
   size: { width: number; height: number };
   zIndex: number;
+  gridPosition?: { row: number; col: number };
 }
 
 export interface Project {
@@ -55,6 +56,8 @@ export interface AppState {
   // Window Management
   windows: WindowState[];
   nextZIndex: number;
+  gridCols: number;
+  gridRows: number;
   
   // Measurement Parameters
   globalParameters: ThermalMetadata;
@@ -88,6 +91,53 @@ export interface AppState {
   resetLayout: () => void;
   updateGlobalParameters: (params: Partial<ThermalMetadata>) => void;
   clearAll: () => void;
+  calculateGridLayout: () => void;
+}
+
+// Grid layout calculation function
+function calculateOptimalGrid(windowCount: number): { cols: number; rows: number } {
+  if (windowCount <= 0) return { cols: 1, rows: 1 };
+  if (windowCount === 1) return { cols: 1, rows: 1 };
+  if (windowCount === 2) return { cols: 2, rows: 1 };
+  if (windowCount <= 4) return { cols: 2, rows: 2 };
+  if (windowCount <= 6) return { cols: 3, rows: 2 };
+  if (windowCount <= 9) return { cols: 3, rows: 3 };
+  return { cols: 4, rows: Math.ceil(windowCount / 4) };
+}
+
+// Calculate window positions based on grid
+function calculateWindowPositions(windows: WindowState[], containerWidth: number = 1600, containerHeight: number = 900): WindowState[] {
+  const openWindows = windows.filter(w => w.isOpen);
+  const { cols, rows } = calculateOptimalGrid(openWindows.length);
+  
+  const padding = 10;
+  const headerHeight = 40; // Top menu bar height
+  const availableWidth = containerWidth - (padding * (cols + 1));
+  const availableHeight = containerHeight - headerHeight - (padding * (rows + 1));
+  
+  const windowWidth = Math.floor(availableWidth / cols);
+  const windowHeight = Math.floor(availableHeight / rows);
+  
+  return windows.map((window, index) => {
+    if (!window.isOpen) return window;
+    
+    const openIndex = openWindows.findIndex(w => w.id === window.id);
+    const row = Math.floor(openIndex / cols);
+    const col = openIndex % cols;
+    
+    const x = padding + (col * (windowWidth + padding));
+    const y = headerHeight + padding + (row * (windowHeight + padding));
+    
+    return {
+      ...window,
+      position: { x, y },
+      size: { 
+        width: Math.max(windowWidth, window.id === 'thermal-viewer' ? 600 : 300), 
+        height: Math.max(windowHeight, window.id === 'data-table' ? 200 : 250) 
+      },
+      gridPosition: { row, col }
+    };
+  });
 }
 
 const defaultWindows: WindowState[] = [
@@ -95,56 +145,56 @@ const defaultWindows: WindowState[] = [
     id: 'thermal-viewer',
     title: 'Thermal Viewer',
     isOpen: true,
-    position: { x: 20, y: 60 },
-    size: { width: 800, height: 600 },
+    position: { x: 10, y: 50 },
+    size: { width: 600, height: 400 },
     zIndex: 1
   },
   {
     id: 'real-image-viewer',
     title: 'Real Image Viewer',
     isOpen: true,
-    position: { x: 840, y: 60 },
-    size: { width: 600, height: 400 },
+    position: { x: 620, y: 50 },
+    size: { width: 500, height: 400 },
     zIndex: 2
   },
   {
-    id: 'data-table',
-    title: 'Data Table',
+    id: 'parameters',
+    title: 'Parameters',
     isOpen: true,
-    position: { x: 20, y: 680 },
-    size: { width: 800, height: 300 },
+    position: { x: 1130, y: 50 },
+    size: { width: 300, height: 400 },
     zIndex: 3
   },
   {
     id: 'histogram',
     title: 'Histogram',
     isOpen: true,
-    position: { x: 840, y: 480 },
+    position: { x: 10, y: 460 },
     size: { width: 400, height: 300 },
     zIndex: 4
   },
   {
-    id: 'parameters',
-    title: 'Parameters',
+    id: 'data-table',
+    title: 'Data Table',
     isOpen: true,
-    position: { x: 1260, y: 60 },
-    size: { width: 300, height: 400 },
+    position: { x: 420, y: 460 },
+    size: { width: 700, height: 300 },
     zIndex: 5
   },
   {
     id: 'timeline',
     title: 'Timeline',
     isOpen: false,
-    position: { x: 20, y: 1000 },
-    size: { width: 1000, height: 200 },
+    position: { x: 10, y: 770 },
+    size: { width: 800, height: 150 },
     zIndex: 6
   },
   {
     id: 'reports',
     title: 'Reports',
     isOpen: false,
-    position: { x: 1260, y: 480 },
-    size: { width: 400, height: 500 },
+    position: { x: 1130, y: 460 },
+    size: { width: 300, height: 300 },
     zIndex: 7
   }
 ];
@@ -170,8 +220,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   showMarkers: true,
   showRegions: true,
   showTemperatureScale: true,
-  windows: defaultWindows,
+  windows: calculateWindowPositions(defaultWindows),
   nextZIndex: 8,
+  gridCols: 3,
+  gridRows: 2,
   globalParameters: {
     emissivity: 0.95,
     ambientTemp: 20,
@@ -247,13 +299,18 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setActiveTool: (tool) => set({ activeTool: tool }),
 
-  toggleWindow: (windowId) => set((state) => ({
-    windows: state.windows.map(window =>
+  toggleWindow: (windowId) => set((state) => {
+    const updatedWindows = state.windows.map(window =>
       window.id === windowId 
         ? { ...window, isOpen: !window.isOpen }
         : window
-    )
-  })),
+    );
+    
+    // Recalculate grid layout after toggling
+    const gridLayoutWindows = calculateWindowPositions(updatedWindows);
+    
+    return { windows: gridLayoutWindows };
+  }),
 
   updateWindow: (windowId, updates) => set((state) => ({
     windows: state.windows.map(window =>
@@ -275,7 +332,18 @@ export const useAppStore = create<AppState>((set, get) => ({
     };
   }),
 
-  resetLayout: () => set({ windows: defaultWindows, nextZIndex: 8 }),
+  resetLayout: () => set((state) => {
+    const resetWindows = calculateWindowPositions(defaultWindows);
+    return { 
+      windows: resetWindows, 
+      nextZIndex: 8 
+    };
+  }),
+
+  calculateGridLayout: () => set((state) => {
+    const gridLayoutWindows = calculateWindowPositions(state.windows);
+    return { windows: gridLayoutWindows };
+  }),
 
   updateGlobalParameters: (params) => set((state) => ({
     globalParameters: { ...state.globalParameters, ...params }

@@ -73,6 +73,24 @@ export default function Window({
       onMouseDown={handleMouseDown}
       className="bg-gray-800 border border-gray-600 rounded-lg shadow-2xl overflow-hidden"
       style={{ zIndex: window.zIndex }}
+      enableResizing={{
+        top: true,
+        right: true,
+        bottom: true,
+        left: true,
+        topRight: true,
+        bottomRight: true,
+        bottomLeft: true,
+        topLeft: true,
+      }}
+      resizeHandleStyles={{
+        bottomRight: {
+          width: '20px',
+          height: '20px',
+          background: 'transparent',
+          cursor: 'se-resize'
+        }
+      }}
     >
       <div className="flex flex-col h-full">
         {/* Window Header */}
