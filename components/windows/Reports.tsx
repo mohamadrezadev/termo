@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useAppStore } from '@/lib/store';
 import { translations } from '@/lib/translations';
+import logger from '@/lib/logger';
 import Window from './Window';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,7 +42,7 @@ export default function Reports() {
   const activeImage = images.find(img => img.id === activeImageId);
 
   const handleGenerateReport = (format: 'pdf' | 'docx' | 'html') => {
-    console.log('Generating report in format:', format);
+    logger.info('Generating report in format', format);
     // Report generation logic would go here
   };
 
