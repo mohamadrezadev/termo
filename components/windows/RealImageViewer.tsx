@@ -12,7 +12,8 @@ import {
   RotateCcw,
   Eye,
   EyeOff,
-  Layers
+  Layers,
+  Image as ImageIcon
 } from 'lucide-react';
 
 export default function RealImageViewer() {
@@ -141,7 +142,7 @@ export default function RealImageViewer() {
 
         {/* Image Container */}
         <div className="flex-1 relative overflow-hidden bg-gray-900">
-          {activeImage?.realImage ? (
+          {activeImage ? (
             <div
               className="absolute inset-0 cursor-move"
               onMouseMove={handleMouseMove}
@@ -149,40 +150,65 @@ export default function RealImageViewer() {
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseUp}
             >
-              <img
-                ref={imageRef}
-                src={activeImage.realImage}
-                alt="Real Image"
-                className="absolute top-0 left-0 max-w-none"
-                style={{
-                  transform: `scale(${zoom}) translate(${panX / zoom}px, ${panY / zoom}px)`,
-                  transformOrigin: '0 0',
-                  opacity: fusionMode === 'overlay' ? overlayOpacity / 100 : 1
-                }}
-                draggable={false}
-              />
+              {/* Show real image if available, otherwise show thermal */}
+              {(fusionMode === 'visual' || fusionMode === 'overlay') && activeImage.realImage ? (
+                <img
+                  ref={imageRef}
+                  src={activeImage.realImage}
+                  alt="Real Image"
+                  className="absolute top-0 left-0 max-w-none"
+                  style={{
+                    transform: `scale(${zoom}) translate(${panX / zoom}px, ${panY / zoom}px)`,
+                    transformOrigin: '0 0',
+                    opacity: fusionMode === 'overlay' ? overlayOpacity / 100 : 1
+                  }}
+                  draggable={false}
+                />
+              ) : null}
               
-              {/* Thermal Overlay */}
-              {fusionMode === 'overlay' && activeImage.canvas && (
+              {/* Show thermal image */}
+              {(fusionMode === 'thermal' || fusionMode === 'overlay') && activeImage.canvas && (
                 <canvas
                   className="absolute top-0 left-0 max-w-none pointer-events-none"
                   style={{
                     transform: `scale(${zoom}) translate(${panX / zoom}px, ${panY / zoom}px)`,
                     transformOrigin: '0 0',
-                    opacity: (100 - overlayOpacity) / 100,
-                    mixBlendMode: 'multiply'
+                    opacity: fusionMode === 'overlay' ? (100 - overlayOpacity) / 100 : 1,
+                    mixBlendMode: fusionMode === 'overlay' ? 'multiply' : 'normal'
                   }}
                   width={activeImage.canvas.width}
                   height={activeImage.canvas.height}
+                  ref={(canvas) => {
+                    if (canvas && activeImage.canvas) {
+                      const ctx = canvas.getContext('2d');
+                      const sourceCtx = activeImage.canvas.getContext('2d');
+                      if (ctx && sourceCtx) {
+                        canvas.width = activeImage.canvas.width;
+                        canvas.height = activeImage.canvas.height;
+                        ctx.drawImage(activeImage.canvas, 0, 0);
+                      }
+                    }
+                  }}
                 />
+              )}
+
+              {/* Fallback if no real image */}
+              {!activeImage.realImage && fusionMode === 'visual' && (
+                <div className="flex items-center justify-center h-full text-gray-400">
+                  <div className="text-center">
+                    <ImageIcon className="w-16 h-16 mx-auto mb-4" />
+                    <p className="text-lg mb-2">No Real Image Available</p>
+                    <p className="text-sm">This thermal image doesn't contain embedded real image data</p>
+                  </div>
+                </div>
               )}
             </div>
           ) : (
             <div className="flex items-center justify-center h-full text-gray-400">
               <div className="text-center">
-                <Eye className="w-16 h-16 mx-auto mb-4" />
-                <p className="text-lg mb-2">No Real Image Available</p>
-                <p className="text-sm">Upload a thermal image with embedded real image data</p>
+                <ImageIcon className="w-16 h-16 mx-auto mb-4" />
+                <p className="text-lg mb-2">No Image Selected</p>
+                <p className="text-sm">Upload a thermal image to view it here</p>
               </div>
             </div>
           )}
@@ -199,7 +225,7 @@ export default function RealImageViewer() {
           <div className="flex items-center space-x-4">
             <span>Zoom: {Math.round(zoom * 100)}%</span>
             {activeImage && (
-              <span>Size: {activeImage.name}</span>
+              <span>Image: {activeImage.name}</span>
             )}
           </div>
         </div>
