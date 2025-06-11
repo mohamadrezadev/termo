@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useRef, useEffect } from 'react';
+import { ReactNode } from 'react';
 import { Rnd } from 'react-rnd';
 import { useAppStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
@@ -28,14 +28,7 @@ export default function Window({
     toggleWindow 
   } = useAppStore();
   
-  const windowRef = useRef<HTMLDivElement>(null);
   const window = windows.find(w => w.id === id);
-
-  useEffect(() => {
-    if (windowRef.current && window && windowRef.current.style) {
-      windowRef.current.style.zIndex = window.zIndex.toString();
-    }
-  }, [window?.zIndex, windowRef.current]);
 
   if (!window || !window.isOpen) {
     return null;
@@ -51,7 +44,6 @@ export default function Window({
 
   return (
     <Rnd
-      ref={windowRef}
       size={window.size}
       position={window.position}
       minWidth={minWidth}
