@@ -3,7 +3,7 @@
 import { useAppStore } from '@/lib/store';
 import { translations } from '@/lib/translations';
 import logger from '@/lib/logger';
-import { extractThermalData } from '@/lib/thermal-utils';
+import { COLOR_PALETTES, extractThermalData } from '@/lib/thermal-utils';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -39,7 +39,8 @@ export default function TopMenuBar() {
     resetLayout,
     calculateGridLayout,
     currentProject,
-    addImage
+    addImage,
+    setPalette
   } = useAppStore();
   const t = translations[language];
 
@@ -136,12 +137,11 @@ export default function TopMenuBar() {
                 {t.palette}
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
-                <DropdownMenuItem>{t.iron}</DropdownMenuItem>
-                <DropdownMenuItem>{t.rainbow}</DropdownMenuItem>
-                <DropdownMenuItem>{t.grayscale}</DropdownMenuItem>
-                <DropdownMenuItem>{t.sepia}</DropdownMenuItem>
-                <DropdownMenuItem>{t.medical}</DropdownMenuItem>
-                <DropdownMenuItem>{t.coldHot}</DropdownMenuItem>
+                {Object.entries(COLOR_PALETTES).map(([key, palette]) => (
+                  <DropdownMenuItem key={key} onClick={() => setPalette(key)}>
+                    {t[key as keyof typeof t] || palette.name}
+                  </DropdownMenuItem>
+                ))}
               </DropdownMenuSubContent>
             </DropdownMenuSub>
           </DropdownMenuContent>
