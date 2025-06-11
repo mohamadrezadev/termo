@@ -3,6 +3,7 @@
 import { useAppStore } from '@/lib/store';
 import { translations } from '@/lib/translations';
 import logger from '@/lib/logger';
+import { extractThermalData } from '@/lib/thermal-utils';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -33,13 +34,25 @@ export default function TopMenuBar() {
   const { 
     language, 
     setLanguage, 
-    windows, 
-    toggleWindow, 
+    windows,
+    toggleWindow,
     resetLayout,
     calculateGridLayout,
-    currentProject 
+    currentProject,
+    addImage
   } = useAppStore();
   const t = translations[language];
+
+  const handleFiles = async (files: FileList) => {
+    for (let i = 0; i < files.length; i++) {
+      try {
+        const img = await extractThermalData(files[i]);
+        addImage(img);
+      } catch (err) {
+        logger.error('Failed to process file', files[i].name, err);
+      }
+    }
+  };
 
   const handleFileUpload = () => {
     const input = document.createElement('input');
@@ -49,8 +62,8 @@ export default function TopMenuBar() {
     input.onchange = (e) => {
       const files = (e.target as HTMLInputElement).files;
       if (files) {
-        // Handle file upload logic here
         logger.info('Files selected', files);
+        handleFiles(files);
       }
     };
     input.click();

@@ -111,23 +111,26 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
   } : null;
 }
 
-export function extractThermalData(file: File): Promise<ThermalImage> {
+export async function extractThermalData(file: File): Promise<ThermalImage> {
+  if (file.name.toLowerCase().endsWith('.bmt')) {
+    const { parseBMTFile } = await import('./bmt');
+    return parseBMTFile(file);
+  }
+
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    
+
     reader.onload = (e) => {
       const result = e.target?.result;
       if (!result) {
         reject(new Error('Failed to read file'));
         return;
       }
-      
+
       const img = new Image();
       img.onload = () => {
-        // For now, create mock thermal data
-        // In a real implementation, you would parse BMT/thermal formats here
         const mockThermalData = generateMockThermalData(img.width, img.height);
-        
+
         resolve({
           id: Math.random().toString(36).substr(2, 9),
           name: file.name,
@@ -135,11 +138,11 @@ export function extractThermalData(file: File): Promise<ThermalImage> {
           realImage: result as string
         });
       };
-      
+
       img.onerror = () => reject(new Error('Failed to load image'));
       img.src = result as string;
     };
-    
+
     reader.onerror = () => reject(new Error('Failed to read file'));
     reader.readAsDataURL(file);
   });
