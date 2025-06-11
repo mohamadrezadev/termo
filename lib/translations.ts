@@ -37,7 +37,7 @@ export const translations = {
     circle: "Circle",
     polygon: "Polygon",
     isotherm: "Isotherm",
-    distance: "Distance",
+    objectDistance: "Distance",
     angle: "Angle",
     
     // Image Controls
@@ -53,9 +53,13 @@ export const translations = {
     iron: "Iron",
     rainbow: "Rainbow",
     grayscale: "Grayscale",
+    grayscaleInverted: "Grayscale (Inverted)",
     sepia: "Sepia",
-    medical: "Medical",
+    blueRed: "Blue/Red",
+    hotCold: "Hot/Cold",
     coldHot: "Cold/Hot",
+    humidityImage: "Humidity Image",
+    ironbow: "Ironbow",
     
     // Temperature & Measurements
     temperature: "Temperature",
@@ -153,7 +157,7 @@ export const translations = {
     circle: "دایره",
     polygon: "چندضلعی",
     isotherm: "ایزوترم",
-    distance: "فاصله",
+    objectDistance: "فاصله",
     angle: "زاویه",
     
     // Image Controls
@@ -169,10 +173,14 @@ export const translations = {
     iron: "آهنی",
     rainbow: "رنگین‌کمان",
     grayscale: "خاکستری",
+    grayscaleInverted: "خاکستری معکوس",
     sepia: "سپیا",
-    medical: "پزشکی",
+    blueRed: "آبی/قرمز",
+    hotCold: "داغ/سرد",
     coldHot: "سرد/گرم",
-    
+    humidityImage: "تصویر رطوبت",
+    ironbow: "آیرون‌بو",
+
     // Temperature & Measurements
     temperature: "دما",
     emissivity: "گسیل‌پذیری",

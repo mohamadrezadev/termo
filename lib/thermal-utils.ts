@@ -65,17 +65,33 @@ export const COLOR_PALETTES: Record<string, ColorPalette> = {
     name: 'Grayscale',
     colors: ['#000000', '#404040', '#808080', '#c0c0c0', '#ffffff']
   },
+  grayscaleInverted: {
+    name: 'Grayscale (Inverted)',
+    colors: ['#ffffff', '#c0c0c0', '#808080', '#404040', '#000000']
+  },
   sepia: {
     name: 'Sepia',
     colors: ['#2d1b0e', '#6b4423', '#a0673a', '#d4a574', '#f5deb3']
   },
-  medical: {
-    name: 'Medical',
-    colors: ['#000080', '#0040c0', '#0080ff', '#40c0ff', '#80ffff', '#c0ffff', '#ffffff']
+  blueRed: {
+    name: 'Blue/Red',
+    colors: ['#0000ff', '#0040ff', '#ff0000']
+  },
+  hotCold: {
+    name: 'Hot/Cold',
+    colors: ['#ff0000', '#ff8080', '#ffffff', '#80ffff', '#0000ff']
   },
   coldHot: {
     name: 'Cold/Hot',
     colors: ['#0000ff', '#8080ff', '#ffffff', '#ff8080', '#ff0000']
+  },
+  humidityImage: {
+    name: 'Humidity',
+    colors: ['#000080', '#0080ff', '#00ffff', '#80ff80', '#ffff00']
+  },
+  ironbow: {
+    name: 'Ironbow',
+    colors: ['#000000', '#330066', '#660099', '#cc0033', '#ff6600', '#ffff00', '#ffffff']
   }
 };
 
@@ -98,8 +114,8 @@ export function interpolateColor(value: number, min: number, max: number, palett
   const r = Math.round(colorLower.r + factor * (colorUpper.r - colorLower.r));
   const g = Math.round(colorLower.g + factor * (colorUpper.g - colorLower.g));
   const b = Math.round(colorLower.b + factor * (colorUpper.b - colorLower.b));
-  
-  return `rgb(${r}, ${g}, ${b})`;
+
+  return rgbToHex(r, g, b);
 }
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
@@ -111,23 +127,31 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
   } : null;
 }
 
-export function extractThermalData(file: File): Promise<ThermalImage> {
+function rgbToHex(r: number, g: number, b: number): string {
+  const toHex = (n: number) => n.toString(16).padStart(2, '0');
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+export async function extractThermalData(file: File): Promise<ThermalImage> {
+  if (file.name.toLowerCase().endsWith('.bmt')) {
+    const { parseBMTFile } = await import('./bmt');
+    return parseBMTFile(file);
+  }
+
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    
+
     reader.onload = (e) => {
       const result = e.target?.result;
       if (!result) {
         reject(new Error('Failed to read file'));
         return;
       }
-      
+
       const img = new Image();
       img.onload = () => {
-        // For now, create mock thermal data
-        // In a real implementation, you would parse BMT/thermal formats here
         const mockThermalData = generateMockThermalData(img.width, img.height);
-        
+
         resolve({
           id: Math.random().toString(36).substr(2, 9),
           name: file.name,
@@ -135,11 +159,11 @@ export function extractThermalData(file: File): Promise<ThermalImage> {
           realImage: result as string
         });
       };
-      
+
       img.onerror = () => reject(new Error('Failed to load image'));
       img.src = result as string;
     };
-    
+
     reader.onerror = () => reject(new Error('Failed to read file'));
     reader.readAsDataURL(file);
   });
