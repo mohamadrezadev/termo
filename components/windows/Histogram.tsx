@@ -22,7 +22,18 @@ export default function Histogram() {
   const palette = COLOR_PALETTES[currentPalette];
 
   const histogramData = useMemo(() => {
-    if (!activeImage?.thermalData) return [];
+    if (!activeImage?.thermalData) {
+      return {
+        data: [] as { temperature: string; count: number; fill: string }[],
+        stats: {
+          mean: '0',
+          stdDev: '0',
+          min: '0',
+          max: '0',
+          totalPixels: 0
+        }
+      };
+    }
 
     const { temperatureMatrix, minTemp, maxTemp } = activeImage.thermalData;
     const effectiveMin = customMinTemp ?? minTemp;
