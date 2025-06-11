@@ -1,24 +1,24 @@
 # Thermal Analyzer Pro
 
-یک نرم‌افزار تحت وب برای مشاهده و تحلیل تصاویر حرارتی است که با Next.js 13 و تایپ‌اسکریپت پیاده‌سازی شده است. این برنامه امکان بارگذاری فایل‌های تصویری رایج و همچنین آرشیوهای فشرده‌ی BMT را دارد و می‌تواند با پالت‌های رنگی مختلف، عکس حرارتی و عکس واقعی (RGB) را نمایش دهد. داده‌ها در یک فروشگاه مرکزی با Zustand نگهداری می‌شوند و رویدادهای مهم توسط سیستم لاگ قابل ردیابی است.
+Thermal Analyzer Pro is a web application built with Next.js 13 and TypeScript for viewing and analyzing thermal images. It can load common image formats as well as compressed **.bmt** archives that contain thermal CSV data and a visible image. The interface is bilingual (English and Persian) and uses Zustand for state management with an integrated logging system.
 
-## ویژگی‌ها
-- پشتیبانی از فایل‌های BMT شامل داده‌ی حرارتی (CSV) و تصویر واقعی
-- انتخاب پالت‌های رنگی متنوع مانند Ironbow، Hot/Cold و غیره
-- نمایشگر حرارتی، نمایشگر تصویر واقعی، جدول داده، هیستوگرام و پنجره‌های قابل جابجایی
-- رابط کاربری دو زبانه (فارسی و انگلیسی)
-- امکان تولید گزارش و خروجی گرفتن از داده‌ها
+## Features
+- Import BMT files with thermal data and real images
+- Select from multiple color palettes such as Ironbow, Hot/Cold, Grayscale, Sepia and others
+- Moveable windows for thermal and real image viewers, histogram, data table and more
+- Generate reports and export data
+- Interface available in English and Persian
 
-## راه‌اندازی
-1. نصب وابستگی‌ها:
+## Getting Started
+1. Install dependencies:
    ```bash
    npm install
    ```
-2. اجرای حالت توسعه:
+2. Run in development mode:
    ```bash
    npm run dev
    ```
-3. ساخت نسخه تولیدی:
+3. Build for production:
    ```bash
    npm run build
    ```
