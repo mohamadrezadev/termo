@@ -2,6 +2,7 @@
 
 import { useAppStore } from '@/lib/store';
 import { translations } from '@/lib/translations';
+import logger from '@/lib/logger';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -49,7 +50,7 @@ export default function TopMenuBar() {
       const files = (e.target as HTMLInputElement).files;
       if (files) {
         // Handle file upload logic here
-        console.log('Files selected:', files);
+        logger.info('Files selected', files);
       }
     };
     input.click();
