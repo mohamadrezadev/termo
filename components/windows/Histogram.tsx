@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { useAppStore } from '@/lib/store';
 import { translations } from '@/lib/translations';
-import { COLOR_PALETTES } from '@/lib/thermal-utils';
+import { COLOR_PALETTES, interpolateColor } from '@/lib/thermal-utils';
 import Window from './Window';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from 'recharts';
 
@@ -22,7 +22,18 @@ export default function Histogram() {
   const palette = COLOR_PALETTES[currentPalette];
 
   const histogramData = useMemo(() => {
-    if (!activeImage?.thermalData) return [];
+    if (!activeImage?.thermalData) {
+      return {
+        data: [] as { temperature: string; count: number; fill: string }[],
+        stats: {
+          mean: '0',
+          stdDev: '0',
+          min: '0',
+          max: '0',
+          totalPixels: 0
+        }
+      };
+    }
 
     const { temperatureMatrix, minTemp, maxTemp } = activeImage.thermalData;
     const effectiveMin = customMinTemp ?? minTemp;
@@ -76,19 +87,6 @@ export default function Histogram() {
     };
   }, [activeImage, customMinTemp, customMaxTemp, palette]);
 
-  // Simple color interpolation function
-  function interpolateColor(value: number, min: number, max: number, palette: any): string {
-    if (max === min) return palette.colors[0];
-    
-    const normalized = Math.max(0, Math.min(1, (value - min) / (max - min)));
-    const index = normalized * (palette.colors.length - 1);
-    const lower = Math.floor(index);
-    const upper = Math.ceil(index);
-    
-    if (lower === upper) return palette.colors[lower];
-    
-    return palette.colors[lower]; // Simplified for now
-  }
 
   return (
     <Window id="histogram" title={t.histogram} minWidth={300} minHeight={250}>
