@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { ThermalImage, Marker, Region, ThermalMetadata } from './thermal-utils';
 import { Language } from './translations';
+import logger from './logger';
 
 export interface WindowState {
   id: string;
@@ -242,21 +243,30 @@ export const useAppStore = create<AppState>((set, get) => ({
     isRTL: language === 'fa' 
   }),
 
-  setCurrentProject: (project) => set({ currentProject: project }),
+  setCurrentProject: (project) => {
+    logger.info('Set current project', project?.id);
+    set({ currentProject: project });
+  },
 
   setActiveImage: (imageId) => set({ activeImageId: imageId }),
 
-  addImage: (image) => set((state) => ({
-    images: [...state.images, image],
-    activeImageId: image.id
-  })),
+  addImage: (image) => {
+    logger.info('Image added', image.id);
+    set((state) => ({
+      images: [...state.images, image],
+      activeImageId: image.id
+    }));
+  },
 
-  removeImage: (imageId) => set((state) => ({
-    images: state.images.filter(img => img.id !== imageId),
-    activeImageId: state.activeImageId === imageId ? null : state.activeImageId,
-    markers: state.markers.filter(marker => marker.id !== imageId),
-    regions: state.regions.filter(region => region.id !== imageId)
-  })),
+  removeImage: (imageId) => {
+    logger.info('Image removed', imageId);
+    set((state) => ({
+      images: state.images.filter(img => img.id !== imageId),
+      activeImageId: state.activeImageId === imageId ? null : state.activeImageId,
+      markers: state.markers.filter(marker => marker.id !== imageId),
+      regions: state.regions.filter(region => region.id !== imageId)
+    }));
+  },
 
   addMarker: (marker) => set((state) => ({
     markers: [...state.markers, marker]
@@ -345,16 +355,22 @@ export const useAppStore = create<AppState>((set, get) => ({
     return { windows: gridLayoutWindows };
   }),
 
-  updateGlobalParameters: (params) => set((state) => ({
-    globalParameters: { ...state.globalParameters, ...params }
-  })),
+  updateGlobalParameters: (params) => {
+    logger.debug('Global parameters updated', params);
+    set((state) => ({
+      globalParameters: { ...state.globalParameters, ...params }
+    }));
+  },
 
-  clearAll: () => set({
-    markers: [],
-    regions: [],
-    zoom: 1,
-    panX: 0,
-    panY: 0,
-    activeTool: 'cursor'
-  })
+  clearAll: () => {
+    logger.info('Cleared all markers and regions');
+    set({
+      markers: [],
+      regions: [],
+      zoom: 1,
+      panX: 0,
+      panY: 0,
+      activeTool: 'cursor'
+    });
+  }
 }));
