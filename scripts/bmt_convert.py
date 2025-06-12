@@ -1,18 +1,24 @@
 import struct
 from io import BytesIO
-from typing import Tuple
+from typing import Tuple, Union, BinaryIO
 from PIL import Image
 
 
-def extract_images_from_bmt(path: str) -> Tuple[Image.Image, Image.Image, int, int]:
+def extract_images_from_bmt(path_or_file: Union[str, BinaryIO]) -> Tuple[Image.Image, Image.Image, int, int]:
     """Extract thermal and real images from a BMT file.
 
     The BMT format in this project contains two concatenated BMP files. The first
     BMP is a grayscale thermal image, the second is the corresponding RGB photo.
     Returns the pseudocolored thermal image, the real image and their dimensions.
+
+    ``path_or_file`` can be a path string or a file-like object opened in binary
+    mode.
     """
-    with open(path, 'rb') as f:
-        data = f.read()
+    if isinstance(path_or_file, (str, bytes, bytearray)):
+        with open(path_or_file, 'rb') as f:
+            data = f.read()
+    else:
+        data = path_or_file.read()
 
     offsets = []
     for i in range(len(data) - 1):

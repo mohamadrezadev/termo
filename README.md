@@ -39,6 +39,19 @@ Thermal Analyzer Pro is a web application for analyzing thermal images. It is bu
 
 The project has an ESLint configuration. You can run `npm run lint` to check the code.
 
+## Python Edition
+
+For users preferring a Python-based stack, a simplified rewrite using **Streamlit**
+is available under the `pyapp/` directory. It supports uploading thermal images or
+`.bmt` files and visualises them with an interactive histogram.
+
+Run the Python version with:
+
+```bash
+pip install -r pyapp/requirements.txt
+streamlit run pyapp/main.py
+```
+
 ## Project Structure
 
 - `app/` – Next.js app directory
@@ -48,16 +61,11 @@ The project has an ESLint configuration. You can run `npm run lint` to check the
 
 ## Converting BMT files
 
-A helper script is provided under `scripts/bmt_convert.py` for extracting the
-thermal and RGB images from a `.bmt` file. The tool relies on the Pillow
-library:
+The Python edition includes built-in support for the custom `.bmt` format
+containing two concatenated BMP images (thermal and RGB).
 
-```bash
-pip install pillow
-python scripts/bmt_convert.py example.bmt --thermal thermal.png --real real.png
-```
-
-Only the generated thermal image is currently displayed in the web interface.
+If you only need a command line tool to extract the images, you can run
+`python scripts/bmt_convert.py your_file.bmt --thermal out.png --real photo.png`.
 
 ## License
 
