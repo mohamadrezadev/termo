@@ -58,13 +58,14 @@ async function extractBmps(inputPath, outputDir = '.') {
             // Further validation (optional but good): Check DIB header size or bits per pixel if known
             // For now, we assume if size is plausible, it's a BMP.
 
-            const outputFileName = foundImages.length === 0 ? 'thermal.bmp' : 'normal.bmp';
+            const imageType = foundImages.length === 0 ? 'thermal' : 'real';
+            const outputFileName = foundImages.length === 0 ? 'extracted_thermal.bmp' : 'extracted_real.bmp';
             const outputPath = path.join(outputDir, outputFileName);
 
             try {
                 await fs.writeFile(outputPath, bmpData);
                 console.log(`Saved ${outputFileName} to ${outputPath}`);
-                foundImages.push({ path: outputPath, originalOffset: bmIndex, size: fileSize });
+                foundImages.push({ path: outputPath, originalOffset: bmIndex, size: fileSize, type: imageType });
             } catch (writeError) {
                 console.error(`Error writing BMP file ${outputFileName}:`, writeError);
                 // Continue to try and find the next one even if write fails for one

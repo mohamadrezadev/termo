@@ -846,3 +846,86 @@ export function getTemperatureAtPixel(thermalData: ThermalData, x: number, y: nu
   
   return thermalData.temperatureMatrix[floorY][floorX];
 }
+
+export async function processThermalBmpFromServer(imageUrl: string): Promise<ThermalData> {
+  // Fetch the image
+  const response = await fetch(imageUrl);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+  }
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+
+  try {
+    // Load the image
+    const img = new Image();
+    img.src = objectUrl;
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = (err) => reject(new Error(`Failed to load image from object URL: ${err instanceof ErrorEvent ? err.message : String(err)}`));
+    });
+
+    // Process on canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Failed to get 2D context from canvas');
+    }
+    ctx.drawImage(img, 0, 0);
+    const imageData = ctx.getImageData(0, 0, img.width, img.height);
+
+    // Extract temperature data (using red channel)
+    const temperatureMatrix: number[][] = [];
+    let minTemp = Infinity;
+    let maxTemp = -Infinity;
+
+    if (img.width === 0 || img.height === 0) {
+        // Handle zero-size image immediately
+        minTemp = 0;
+        maxTemp = 0;
+    } else {
+        for (let y = 0; y < img.height; y++) {
+            const row: number[] = [];
+            for (let x = 0; x < img.width; x++) {
+                const pixelIndex = (y * img.width + x) * 4;
+                const temp = imageData.data[pixelIndex]; // Red channel as temperature
+                row.push(temp);
+                minTemp = Math.min(minTemp, temp);
+                maxTemp = Math.max(maxTemp, temp);
+            }
+            temperatureMatrix.push(row);
+        }
+        // If after processing all pixels, minTemp is still Infinity,
+        // it means no pixels were processed (e.g., fully transparent image, though unlikely for BMP from server)
+        // or all pixels had an alpha of 0 if we were considering that.
+        // For red channel processing, this check is mainly for true 0-pixel images.
+        if (minTemp === Infinity) {
+            minTemp = 0;
+            maxTemp = 0;
+        }
+    }
+
+    // Return ThermalData
+    return {
+      width: img.width,
+      height: img.height,
+      temperatureMatrix,
+      minTemp,
+      maxTemp,
+      metadata: {
+        emissivity: 0.95,
+        ambientTemp: 20,
+        reflectedTemp: 20,
+        humidity: 0.50, // Represented as 0-1
+        distance: 1.0,
+        cameraModel: 'Server Extracted BMP',
+        timestamp: new Date(),
+      },
+    };
+  } finally {
+    // Clean up
+    URL.revokeObjectURL(objectUrl);
+  }
+}
