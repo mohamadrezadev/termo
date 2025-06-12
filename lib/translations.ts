@@ -21,7 +21,7 @@ export const translations = {
     
     // Window Management
     thermalViewer: "Thermal Viewer",
-    realImageViewer: "Real Image Viewer",
+    rgbImageViewer: "RGB Image Viewer",
     dataTable: "Data Table",
     histogram: "Histogram",
     parameters: "Parameters",
@@ -37,7 +37,6 @@ export const translations = {
     circle: "Circle",
     polygon: "Polygon",
     isotherm: "Isotherm",
-    distance: "Distance",
     angle: "Angle",
     
     // Image Controls
@@ -137,7 +136,7 @@ export const translations = {
     
     // Window Management
     thermalViewer: "نمایشگر حرارتی",
-    realImageViewer: "نمایشگر تصویر واقعی",
+    rgbImageViewer: "نمایشگر تصویر رنگی",
     dataTable: "جدول داده‌ها",
     histogram: "هیستوگرام",
     parameters: "پارامترها",
@@ -153,7 +152,6 @@ export const translations = {
     circle: "دایره",
     polygon: "چندضلعی",
     isotherm: "ایزوترم",
-    distance: "فاصله",
     angle: "زاویه",
     
     // Image Controls
