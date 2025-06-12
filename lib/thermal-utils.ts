@@ -111,37 +111,154 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
   } : null;
 }
 
+/**
+ * Attempt to parse a BMT file which is assumed to contain two concatenated BMP
+ * images. The first is a grayscale thermal bitmap and the second is the visual
+ * RGB photo. The thermal image pixels are mapped directly to temperatures
+ * (0-255 for demonstration purposes).
+ */
+async function parseBmt(buffer: ArrayBuffer): Promise<{
+  thermalData: ThermalData;
+  realUrl: string;
+}> {
+  const bytes = new Uint8Array(buffer);
+  const view = new DataView(buffer);
+  const offsets: number[] = [];
+
+  // Look for "BM" signatures which indicate BMP headers
+  for (let i = 0; i < bytes.length - 1; i++) {
+    if (bytes[i] === 0x42 && bytes[i + 1] === 0x4d) offsets.push(i);
+  }
+
+  if (offsets.length < 2) {
+    throw new Error('No BMP headers found');
+  }
+
+  const images: HTMLImageElement[] = [];
+  const urls: string[] = [];
+
+  // Only use the first two detected BMPs
+  for (const off of offsets.slice(0, 2)) {
+    if (off + 6 > bytes.length) continue;
+    const size = view.getUint32(off + 2, true);
+    if (size <= 0 || off + size > bytes.length) continue;
+    const slice = buffer.slice(off, off + size);
+    const blob = new Blob([slice], { type: 'image/bmp' });
+    const url = URL.createObjectURL(blob);
+    urls.push(url);
+    const img = await new Promise<HTMLImageElement>((res, rej) => {
+      const i = new Image();
+      i.onload = () => res(i);
+      i.onerror = () => rej(new Error('Image load failed'));
+      i.src = url;
+    });
+    images.push(img);
+  }
+
+  if (images.length < 2) {
+    urls.forEach(URL.revokeObjectURL);
+    throw new Error('Expected two BMP images');
+  }
+
+  const width = images[0].width;
+  const height = images[0].height;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d')!;
+
+  // Extract thermal matrix from first BMP
+  ctx.drawImage(images[0], 0, 0);
+  const data = ctx.getImageData(0, 0, width, height).data;
+  const matrix: number[][] = [];
+  let minTemp = Infinity;
+  let maxTemp = -Infinity;
+  for (let y = 0; y < height; y++) {
+    const row: number[] = [];
+    for (let x = 0; x < width; x++) {
+      const v = data[(y * width + x) * 4];
+      row.push(v);
+      if (v < minTemp) minTemp = v;
+      if (v > maxTemp) maxTemp = v;
+    }
+    matrix.push(row);
+  }
+
+  const thermalData: ThermalData = {
+    width,
+    height,
+    temperatureMatrix: matrix,
+    minTemp,
+    maxTemp,
+    metadata: {
+      emissivity: 0.95,
+      ambientTemp: 20,
+      reflectedTemp: 20,
+      humidity: 50,
+      distance: 1
+    }
+  };
+
+  // Second BMP is the real RGB photo
+  ctx.clearRect(0, 0, width, height);
+  ctx.drawImage(images[1], 0, 0);
+  const realUrl = canvas.toDataURL('image/png');
+
+  urls.forEach(URL.revokeObjectURL);
+
+  return { thermalData, realUrl };
+}
+
 export function extractThermalData(file: File): Promise<ThermalImage> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    
-    reader.onload = (e) => {
-      const result = e.target?.result;
-      if (!result) {
+
+    reader.onload = async (e) => {
+      const buffer = e.target?.result as ArrayBuffer | undefined;
+      if (!buffer) {
         reject(new Error('Failed to read file'));
         return;
       }
-      
-      const img = new Image();
-      img.onload = () => {
-        // For now, create mock thermal data
-        // In a real implementation, you would parse BMT/thermal formats here
-        const mockThermalData = generateMockThermalData(img.width, img.height);
-        
+
+      try {
+        // Try to interpret the file as a BMT container
+        const { thermalData, realUrl } = await parseBmt(buffer);
+
         resolve({
           id: Math.random().toString(36).substr(2, 9),
           name: file.name,
-          thermalData: mockThermalData,
-          rgbImage: result as string
+          thermalData,
+          rgbImage: realUrl
         });
+        return;
+      } catch {
+        // fall back to treating it as a regular image
+      }
+
+      // Fallback: load as normal image and create mock thermal data
+      const fallbackReader = new FileReader();
+      fallbackReader.onload = () => {
+        const url = fallbackReader.result as string;
+        const img = new Image();
+        img.onload = () => {
+          const mockThermalData = generateMockThermalData(img.width, img.height);
+          resolve({
+            id: Math.random().toString(36).substr(2, 9),
+            name: file.name,
+            thermalData: mockThermalData,
+            rgbImage: url
+          });
+        };
+        img.onerror = () => reject(new Error('Failed to load image'));
+        img.src = url;
       };
-      
-      img.onerror = () => reject(new Error('Failed to load image'));
-      img.src = result as string;
+      fallbackReader.onerror = () => reject(new Error('Failed to read file'));
+      fallbackReader.readAsDataURL(file);
     };
-    
+
     reader.onerror = () => reject(new Error('Failed to read file'));
-    reader.readAsDataURL(file);
+    reader.readAsArrayBuffer(file);
   });
 }
 
