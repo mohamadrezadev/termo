@@ -407,11 +407,64 @@ function fallbackToImageRead(file: File, resolve: (value: ThermalImage | Promise
     }
     const img = new Image();
     img.onload = () => {
-      const mockThermalData = generateMockThermalData(img.width, img.height);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+
+      if (!ctx) {
+        reject(new Error('Failed to get canvas context for fallback image processing'));
+        return;
+      }
+
+      ctx.drawImage(img, 0, 0);
+      const imageData = ctx.getImageData(0, 0, img.width, img.height);
+
+      const temperatureMatrix: number[][] = [];
+      let minTemp = Infinity;
+      let maxTemp = -Infinity;
+
+      for (let y = 0; y < img.height; y++) {
+        const row: number[] = [];
+        for (let x = 0; x < img.width; x++) {
+          const pixelIndex = (y * img.width + x) * 4;
+          const r = imageData.data[pixelIndex];
+          const g = imageData.data[pixelIndex + 1];
+          const b = imageData.data[pixelIndex + 2];
+          const grayscaleTemp = 0.299 * r + 0.587 * g + 0.114 * b;
+          row.push(grayscaleTemp);
+          minTemp = Math.min(minTemp, grayscaleTemp);
+          maxTemp = Math.max(maxTemp, grayscaleTemp);
+        }
+        temperatureMatrix.push(row);
+      }
+
+      if (minTemp === Infinity) { // Handle 0x0 image or fully transparent image
+        minTemp = 0;
+        maxTemp = 0;
+      }
+
+      const newThermalData: ThermalData = {
+        width: img.width,
+        height: img.height,
+        temperatureMatrix,
+        minTemp,
+        maxTemp,
+        metadata: {
+          emissivity: 0.95,
+          ambientTemp: 20,
+          reflectedTemp: 20,
+          humidity: 0.50,
+          distance: 1.0,
+          cameraModel: 'Standard Image (Grayscale)',
+          timestamp: new Date()
+        }
+      };
+
       resolve({
         id: generateId(),
         name: file.name,
-        thermalData: mockThermalData,
+        thermalData: newThermalData,
         realImage: result_fallback as string,
       });
     };
