@@ -5,7 +5,7 @@ import { translations } from '@/lib/translations';
 import TopMenuBar from './TopMenuBar';
 import WindowManager from './WindowManager';
 import ThermalViewer from '../windows/ThermalViewer';
-import RealImageViewer from '../windows/RealImageViewer';
+import RgbImageViewer from '../windows/RgbImageViewer';
 import DataTable from '../windows/DataTable';
 import Histogram from '../windows/Histogram';
 import Parameters from '../windows/Parameters';
@@ -23,7 +23,7 @@ export default function MainLayout() {
       <div className="relative h-[calc(100vh-40px)] overflow-hidden">
         <WindowManager>
           <ThermalViewer />
-          <RealImageViewer />
+          <RgbImageViewer />
           <DataTable />
           <Histogram />
           <Parameters />

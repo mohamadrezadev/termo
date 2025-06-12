@@ -16,7 +16,7 @@ import {
   Image as ImageIcon
 } from 'lucide-react';
 
-export default function RealImageViewer() {
+export default function RgbImageViewer() {
   const {
     language,
     images,
@@ -30,7 +30,7 @@ export default function RealImageViewer() {
 
   const t = translations[language];
   const imageRef = useRef<HTMLImageElement>(null);
-  const [fusionMode, setFusionMode] = useState<'thermal' | 'visual' | 'overlay' | 'edge'>('visual');
+  const [fusionMode, setFusionMode] = useState<'rgb' | 'thermal' | 'overlay' | 'edge'>('rgb');
   const [overlayOpacity, setOverlayOpacity] = useState(50);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -63,14 +63,14 @@ export default function RealImageViewer() {
   };
 
   const fusionModes = [
-    { id: 'thermal', icon: Eye, name: 'Thermal Only' },
-    { id: 'visual', icon: Eye, name: 'Visual Only' },
+    { id: 'rgb', icon: Eye, name: 'RGB' },
+    { id: 'thermal', icon: Eye, name: 'Thermal' },
     { id: 'overlay', icon: Layers, name: 'Overlay' },
     { id: 'edge', icon: EyeOff, name: 'Edge Fusion' },
   ];
 
   return (
-    <Window id="real-image-viewer" title={t.realImageViewer} minWidth={400} minHeight={300}>
+    <Window id="rgb-image-viewer" title={t.rgbImageViewer} minWidth={400} minHeight={300}>
       <div className="flex flex-col h-full">
         {/* Toolbar */}
         <div className="flex items-center justify-between p-2 bg-gray-750 border-b border-gray-600">
@@ -150,12 +150,12 @@ export default function RealImageViewer() {
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseUp}
             >
-              {/* Show real image if available, otherwise show thermal */}
-              {(fusionMode === 'visual' || fusionMode === 'overlay') && activeImage.realImage ? (
+              {/* Show RGB image if available */}
+              {(fusionMode === 'rgb' || fusionMode === 'overlay') && activeImage.rgbImage ? (
                 <img
                   ref={imageRef}
-                  src={activeImage.realImage}
-                  alt="Real Image"
+                  src={activeImage.rgbImage}
+                  alt="RGB Image"
                   className="absolute top-0 left-0 max-w-none"
                   style={{
                     transform: `scale(${zoom}) translate(${panX / zoom}px, ${panY / zoom}px)`,
@@ -192,13 +192,13 @@ export default function RealImageViewer() {
                 />
               )}
 
-              {/* Fallback if no real image */}
-              {!activeImage.realImage && fusionMode === 'visual' && (
+              {/* Fallback if no RGB image */}
+              {!activeImage.rgbImage && fusionMode === 'rgb' && (
                 <div className="flex items-center justify-center h-full text-gray-400">
                   <div className="text-center">
                     <ImageIcon className="w-16 h-16 mx-auto mb-4" />
-                    <p className="text-lg mb-2">No Real Image Available</p>
-                    <p className="text-sm">This thermal image doesn&apos;t contain embedded real image data</p>
+                    <p className="text-lg mb-2">No RGB Image Available</p>
+                    <p className="text-sm">This thermal image doesn&apos;t contain an embedded RGB photo</p>
                   </div>
                 </div>
               )}
