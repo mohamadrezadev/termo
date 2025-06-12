@@ -46,6 +46,19 @@ The project has an ESLint configuration. You can run `npm run lint` to check the
 - `lib/` – Zustand store, utilities and translations
 - `hooks/` – React hooks
 
+## Converting BMT files
+
+A helper script is provided under `scripts/bmt_convert.py` for extracting the
+thermal and RGB images from a `.bmt` file. The tool relies on the Pillow
+library:
+
+```bash
+pip install pillow
+python scripts/bmt_convert.py example.bmt --thermal thermal.png --real real.png
+```
+
+Only the generated thermal image is currently displayed in the web interface.
+
 ## License
 
 This project is provided without a specific license. All rights reserved to the original author.
