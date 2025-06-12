@@ -25,7 +25,7 @@ import {
   RotateCcw,
   Upload
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, generateId } from '@/lib/utils';
 
 export default function ThermalViewer() {
   const {
@@ -187,7 +187,7 @@ export default function ThermalViewer() {
 
     if (activeTool === 'point' && temp !== null) {
       const marker = {
-        id: Math.random().toString(36).substr(2, 9),
+        id: generateId(),
         type: 'point' as const,
         x: imgX, // Use direct image coordinates
         y: imgY,
@@ -217,7 +217,7 @@ export default function ThermalViewer() {
           return; // Ignore zero-area rectangles
       }
       const region = {
-        id: Math.random().toString(36).substr(2, 9),
+        id: generateId(),
         type: 'rectangle'as const,
         points: currentRegion.points, // These are already image coordinates
         minTemp: 0,
@@ -260,7 +260,7 @@ export default function ThermalViewer() {
       }
 
       const region = {
-        id: Math.random().toString(36).substr(2, 9),
+        id: generateId(),
         type: 'polygon' as const,
         points: finalPoints, // These are already image coordinates
         minTemp: 0,

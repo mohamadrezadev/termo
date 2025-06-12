@@ -1,3 +1,5 @@
+import { generateId } from './utils';
+
 export interface ThermalData {
   width: number;
   height: number;
@@ -358,7 +360,7 @@ export function extractThermalData(file: File): Promise<ThermalImage> {
         */
 
         resolve({
-            id: Math.random().toString(36).substr(2, 9),
+            id: generateId(),
             name: file.name,
             thermalData: {
               width: thermalImageWidth,
@@ -407,7 +409,7 @@ function fallbackToImageRead(file: File, resolve: (value: ThermalImage | Promise
     img.onload = () => {
       const mockThermalData = generateMockThermalData(img.width, img.height);
       resolve({
-        id: Math.random().toString(36).substr(2, 9),
+        id: generateId(),
         name: file.name,
         thermalData: mockThermalData,
         realImage: result_fallback as string,
