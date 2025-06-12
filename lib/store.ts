@@ -150,8 +150,8 @@ const defaultWindows: WindowState[] = [
     zIndex: 1
   },
   {
-    id: 'real-image-viewer',
-    title: 'Real Image Viewer',
+    id: 'rgb-image-viewer',
+    title: 'RGB Image Viewer',
     isOpen: true,
     position: { x: 620, y: 50 },
     size: { width: 500, height: 400 },
