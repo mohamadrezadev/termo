@@ -205,6 +205,49 @@ export default function ThermalViewer() {
     // Other click-based tool logic can be added here
   }, [activeTool, activeImage, markers, addMarker, isDrawing, currentRegion, setCurrentRegion]);
 
+  const calculateRegionTemperatures = (thermalData: any, points: { x: number; y: number }[], type: string) => {
+    const temps: number[] = [];
+
+    if (type === 'rectangle' && points.length === 2) {
+      const [p1, p2] = points;
+      const minX = Math.floor(Math.min(p1.x, p2.x));
+      const maxX = Math.ceil(Math.max(p1.x, p2.x));
+      const minY = Math.floor(Math.min(p1.y, p2.y));
+      const maxY = Math.ceil(Math.max(p1.y, p2.y));
+
+      for (let y = minY; y <= maxY; y++) {
+        for (let x = minX; x <= maxX; x++) {
+          const temp = getTemperatureAtPixel(thermalData, x, y);
+          if (temp !== null) temps.push(temp);
+        }
+      }
+    }
+
+    if (temps.length === 0) return { min: 0, max: 0, avg: 0 };
+
+    return {
+      min: Math.min(...temps),
+      max: Math.max(...temps),
+      avg: temps.reduce((sum, temp) => sum + temp, 0) / temps.length
+    };
+  };
+
+  const calculateRectangleArea = (points: { x: number; y: number }[]) => {
+    if (points.length !== 2) return 0;
+    const [p1, p2] = points;
+    return Math.abs((p2.x - p1.x) * (p2.y - p1.y));
+  };
+
+  const calculatePolygonArea = (points: { x: number; y: number }[]) => {
+    if (points.length < 3) return 0;
+    let area = 0;
+    for (let i = 0; i < points.length; i++) {
+      const j = (i + 1) % points.length;
+      area += points[i].x * points[j].y;
+      area -= points[j].x * points[i].y;
+    }
+    return Math.abs(area) / 2;
+  };
 
   const handleContainerMouseUp = useCallback(() => {
     setIsDragging(false);
@@ -241,6 +284,7 @@ export default function ThermalViewer() {
       setCurrentRegion(null);
     }
     // Note: Point marker placement is now in handlePixelClickFromRenderer
+
   }, [activeTool, activeImage, regions, addRegion, isDrawing, currentRegion, calculateRegionTemperatures, calculateRectangleArea]);
 
   const handleContainerDoubleClick = useCallback(() => {
@@ -283,51 +327,7 @@ export default function ThermalViewer() {
       setIsDrawing(false);
       setCurrentRegion(null);
     }
-  }, [activeTool, isDrawing, currentRegion, regions.length, addRegion, activeImage]);
-
-  const calculateRegionTemperatures = (thermalData: any, points: { x: number; y: number }[], type: string) => {
-    const temps: number[] = [];
-    
-    if (type === 'rectangle' && points.length === 2) {
-      const [p1, p2] = points;
-      const minX = Math.floor(Math.min(p1.x, p2.x));
-      const maxX = Math.ceil(Math.max(p1.x, p2.x));
-      const minY = Math.floor(Math.min(p1.y, p2.y));
-      const maxY = Math.ceil(Math.max(p1.y, p2.y));
-      
-      for (let y = minY; y <= maxY; y++) {
-        for (let x = minX; x <= maxX; x++) {
-          const temp = getTemperatureAtPixel(thermalData, x, y);
-          if (temp !== null) temps.push(temp);
-        }
-      }
-    }
-    
-    if (temps.length === 0) return { min: 0, max: 0, avg: 0 };
-    
-    return {
-      min: Math.min(...temps),
-      max: Math.max(...temps),
-      avg: temps.reduce((sum, temp) => sum + temp, 0) / temps.length
-    };
-  };
-
-  const calculateRectangleArea = (points: { x: number; y: number }[]) => {
-    if (points.length !== 2) return 0;
-    const [p1, p2] = points;
-    return Math.abs((p2.x - p1.x) * (p2.y - p1.y));
-  };
-
-  const calculatePolygonArea = (points: { x: number; y: number }[]) => {
-    if (points.length < 3) return 0;
-    let area = 0;
-    for (let i = 0; i < points.length; i++) {
-      const j = (i + 1) % points.length;
-      area += points[i].x * points[j].y;
-      area -= points[j].x * points[i].y;
-    }
-    return Math.abs(area) / 2;
-  };
+  }, [activeTool, isDrawing, currentRegion, regions.length, addRegion, activeImage, calculateRegionTemperatures, calculatePolygonArea]);
 
   const handleZoomIn = () => setZoom(Math.min(zoom * 1.2, 5));
   const handleZoomOut = () => setZoom(Math.max(zoom / 1.2, 0.1));
