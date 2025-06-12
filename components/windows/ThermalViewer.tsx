@@ -3,13 +3,14 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { useAppStore } from '@/lib/store';
 import { translations } from '@/lib/translations';
-import { 
-  renderThermalCanvas, 
-  getTemperatureAtPixel, 
+import {
+  getTemperatureAtPixel,
   extractThermalData,
-  COLOR_PALETTES 
+  COLOR_PALETTES,
+  ThermalData // Added for prop typing
 } from '@/lib/thermal-utils';
 import Window from './Window';
+import ThermalImageRenderer from './ThermalImageRenderer'; // Import the new component
 import { Button } from '@/components/ui/button';
 import { 
   MousePointer, 
@@ -50,9 +51,10 @@ export default function ThermalViewer() {
   } = useAppStore();
 
   const t = translations[language];
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  // const canvasRef = useRef<HTMLCanvasElement>(null); // Will be removed
+  const overlayCanvasRef = useRef<HTMLCanvasElement>(null); // New overlay canvas
   const containerRef = useRef<HTMLDivElement>(null);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 }); // Will store image coordinates
   const [currentTemp, setCurrentTemp] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -62,25 +64,7 @@ export default function ThermalViewer() {
   const activeImage = images.find(img => img.id === activeImageId);
   const palette = COLOR_PALETTES[currentPalette];
 
-  const renderThermal = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !activeImage?.thermalData) return;
-
-    renderThermalCanvas(
-      canvas,
-      activeImage.thermalData,
-      palette,
-      customMinTemp || undefined,
-      customMaxTemp || undefined
-    );
-
-    // Store canvas reference in the image for other components
-    activeImage.canvas = canvas;
-  }, [activeImage, palette, customMinTemp, customMaxTemp]);
-
-  useEffect(() => {
-    renderThermal();
-  }, [renderThermal]);
+  // renderThermal and its useEffect will be removed, handled by ThermalImageRenderer
 
   const handleFileUpload = useCallback(async (files: FileList) => {
     for (let i = 0; i < files.length; i++) {
@@ -117,80 +101,125 @@ export default function ThermalViewer() {
     input.click();
   }, [handleFileUpload]);
 
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    const canvas = canvasRef.current;
-    if (!canvas || !activeImage?.thermalData) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left - panX) / zoom;
-    const y = (e.clientY - rect.top - panY) / zoom;
-
-    setMousePos({ x, y });
-
-    const temp = getTemperatureAtPixel(activeImage.thermalData, x, y);
-    setCurrentTemp(temp);
+  // Combined event handler for container (panning, and initial drawing clicks)
+  const handleContainerMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!activeImage?.thermalData) return;
 
     if (isDragging && activeTool === 'cursor') {
       const deltaX = e.clientX - dragStart.x;
       const deltaY = e.clientY - dragStart.y;
       setPan(panX + deltaX, panY + deltaY);
       setDragStart({ x: e.clientX, y: e.clientY });
+      return; // Panning should not update mousePos for temperature or drawing
     }
 
-    // Handle region drawing
-    if (isDrawing && currentRegion && (activeTool === 'rectangle' || activeTool === 'polygon')) {
-      setCurrentRegion({
-        points: [...currentRegion.points.slice(0, -1), { x, y }]
-      });
+    // For drawing tools, calculate image coordinates from container event
+    // This is used when drawing starts or continues outside ThermalImageRenderer's direct callbacks
+    // (e.g. dragging to define a rectangle)
+    if (containerRef.current && (isDrawing || activeTool !== 'cursor')) {
+        const rect = containerRef.current.getBoundingClientRect();
+        // These are coordinates relative to the container, need to be scaled and panned inversely
+        const eventX = e.clientX - rect.left;
+        const eventY = e.clientY - rect.top;
+
+        // Transform container coordinates to image coordinates
+        const imgX = (eventX - panX) / zoom;
+        const imgY = (eventY - panY) / zoom;
+
+        setMousePos({ x: imgX, y: imgY }); // Update mousePos for tooltips, status bar
+
+        // If actively drawing a region, update the currentRegion's last point
+        if (isDrawing && currentRegion && (activeTool === 'rectangle' || activeTool === 'polygon')) {
+            setCurrentRegion({
+                points: [...currentRegion.points.slice(0, -1), { x: imgX, y: imgY }]
+            });
+        }
     }
   }, [activeImage, zoom, panX, panY, isDragging, dragStart, activeTool, setPan, isDrawing, currentRegion]);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    const canvas = canvasRef.current;
-    if (!canvas || !activeImage?.thermalData) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left - panX) / zoom;
-    const y = (e.clientY - rect.top - panY) / zoom;
+  const handlePixelHoverFromRenderer = useCallback((imgX: number, imgY: number, temp: number | null) => {
+    setMousePos({ x: imgX, y: imgY }); // Store true image coordinates
+    setCurrentTemp(temp);
+
+    // If actively drawing a region, update the currentRegion's last point
+    // This ensures smooth drawing even if mouse leaves the renderer canvas but is still over the general area
+    // Note: This might be redundant if handleContainerMouseMove covers it, but good for precision.
+    if (isDrawing && currentRegion && (activeTool === 'rectangle' || activeTool === 'polygon')) {
+      setCurrentRegion({
+        points: [...currentRegion.points.slice(0, -1), { x: imgX, y: imgY }]
+      });
+    }
+  }, [isDrawing, currentRegion, activeTool]);
+
+
+  const handleContainerMouseDown = useCallback((e: React.MouseEvent) => {
+    if (!activeImage?.thermalData || !containerRef.current) return;
+
+    const rect = containerRef.current.getBoundingClientRect();
+    const eventX = e.clientX - rect.left;
+    const eventY = e.clientY - rect.top;
+    const imgX = (eventX - panX) / zoom;
+    const imgY = (eventY - panY) / zoom;
 
     if (activeTool === 'cursor') {
       setIsDragging(true);
       setDragStart({ x: e.clientX, y: e.clientY });
     } else if (activeTool === 'rectangle' && !isDrawing) {
       setIsDrawing(true);
-      setCurrentRegion({ points: [{ x, y }, { x, y }] });
+      setCurrentRegion({ points: [{ x: imgX, y: imgY }, { x: imgX, y: imgY }] });
     } else if (activeTool === 'polygon') {
       if (!isDrawing) {
         setIsDrawing(true);
-        setCurrentRegion({ points: [{ x, y }] });
+        setCurrentRegion({ points: [{ x: imgX, y: imgY }] });
       } else if (currentRegion) {
-        setCurrentRegion({
-          points: [...currentRegion.points, { x, y }]
-        });
+        // For polygon, clicks add points. This is handled by handlePixelClickFromRenderer
+        // or here if click is outside the renderer but on the container
+         setCurrentRegion({
+           points: [...currentRegion.points, { x: imgX, y: imgY }]
+         });
       }
     }
-  }, [activeTool, activeImage, zoom, panX, panY, isDrawing, currentRegion]);
+  }, [activeTool, activeImage, zoom, panX, panY, isDrawing, currentRegion, setDragStart, setIsDragging, setCurrentRegion]);
 
-  const handleMouseUp = useCallback((e: React.MouseEvent) => {
-    setIsDragging(false);
+  const handlePixelClickFromRenderer = useCallback((imgX: number, imgY: number, temp: number | null) => {
+    if (!activeImage?.thermalData) return;
 
-    if (activeTool === 'point' && activeImage?.thermalData && currentTemp !== null) {
+    if (activeTool === 'point' && temp !== null) {
       const marker = {
         id: Math.random().toString(36).substr(2, 9),
         type: 'point' as const,
-        x: mousePos.x,
-        y: mousePos.y,
-        temperature: currentTemp,
+        x: imgX, // Use direct image coordinates
+        y: imgY,
+        temperature: temp,
         label: `Point ${markers.length + 1}`,
-        emissivity: 0.95
+        emissivity: 0.95 // Or from global/local settings
       };
       addMarker(marker);
-    } else if (activeTool === 'rectangle' && isDrawing && currentRegion && currentRegion.points.length === 2) {
-      // Complete rectangle
+    } else if (activeTool === 'polygon' && isDrawing && currentRegion) {
+      // Add point to polygon
+       setCurrentRegion({
+         points: [...currentRegion.points, { x: imgX, y: imgY }]
+       });
+    }
+    // Other click-based tool logic can be added here
+  }, [activeTool, activeImage, markers, addMarker, isDrawing, currentRegion, setCurrentRegion]);
+
+
+  const handleContainerMouseUp = useCallback(() => {
+    setIsDragging(false);
+
+    if (activeTool === 'rectangle' && isDrawing && currentRegion && currentRegion.points.length === 2) {
+      // Validate points to ensure width/height > 0 before finalizing
+      if (currentRegion.points[0].x === currentRegion.points[1].x || currentRegion.points[0].y === currentRegion.points[1].y) {
+          setIsDrawing(false);
+          setCurrentRegion(null);
+          return; // Ignore zero-area rectangles
+      }
       const region = {
         id: Math.random().toString(36).substr(2, 9),
-        type: 'rectangle' as const,
-        points: currentRegion.points,
+        type: 'rectangle'as const,
+        points: currentRegion.points, // These are already image coordinates
         minTemp: 0,
         maxTemp: 0,
         avgTemp: 0,
@@ -211,15 +240,29 @@ export default function ThermalViewer() {
       setIsDrawing(false);
       setCurrentRegion(null);
     }
-  }, [activeTool, activeImage, currentTemp, mousePos, markers.length, regions.length, addMarker, addRegion, isDrawing, currentRegion]);
+    // Note: Point marker placement is now in handlePixelClickFromRenderer
+  }, [activeTool, activeImage, regions, addRegion, isDrawing, currentRegion, calculateRegionTemperatures, calculateRectangleArea]);
 
-  const handleDoubleClick = useCallback(() => {
+  const handleContainerDoubleClick = useCallback(() => {
     if (activeTool === 'polygon' && isDrawing && currentRegion && currentRegion.points.length >= 3) {
-      // Complete polygon
+      // Validate points before finalizing
+      if (currentRegion.points.length < 3) { // Ensure at least 3 points for a polygon
+          setIsDrawing(false);
+          setCurrentRegion(null);
+          return;
+      }
+      // Remove the last point if it's the same as the one added by mouse move for current drawing
+      const finalPoints = currentRegion.points.slice(0, -1);
+      if (finalPoints.length < 3) {
+        setIsDrawing(false);
+        setCurrentRegion(null);
+        return;
+      }
+
       const region = {
         id: Math.random().toString(36).substr(2, 9),
         type: 'polygon' as const,
-        points: currentRegion.points,
+        points: finalPoints, // These are already image coordinates
         minTemp: 0,
         maxTemp: 0,
         avgTemp: 0,
@@ -363,62 +406,84 @@ export default function ThermalViewer() {
           className="flex-1 relative overflow-hidden bg-gray-900"
           onDrop={handleDrop}
           onDragOver={(e) => e.preventDefault()}
+          // Mouse events for panning and initiating drawing are on this container
+          onMouseMove={handleContainerMouseMove}
+          onMouseDown={handleContainerMouseDown}
+          onMouseUp={handleContainerMouseUp}
+          onDoubleClick={handleContainerDoubleClick}
+          onMouseLeave={() => {
+            // setIsDragging(false); // Keep dragging if mouse leaves container but button is still pressed
+            // setCurrentTemp(null); // Temperature is now tied to renderer hover
+          }}
         >
           {activeImage?.thermalData ? (
-            <>
+            <div // This div will be scaled and panned
+              className={cn(
+                  activeTool === 'cursor' ? 'cursor-grab' : 'cursor-crosshair',
+                  isDragging && activeTool === 'cursor' && 'cursor-grabbing'
+              )}
+              style={{
+                width: activeImage.thermalData.width,
+                height: activeImage.thermalData.height,
+                transform: `scale(${zoom}) translate(${panX / zoom}px, ${panY / zoom}px)`,
+                transformOrigin: '0 0',
+                position: 'relative', // For absolute positioning of overlays
+              }}
+            >
+              <ThermalImageRenderer
+                thermalData={activeImage.thermalData}
+                colorPalette={palette}
+                temperatureScale={{
+                  min: customMinTemp ?? activeImage.thermalData.minTemp,
+                  max: customMaxTemp ?? activeImage.thermalData.maxTemp,
+                }}
+                onPixelHover={handlePixelHoverFromRenderer}
+                onPixelClick={handlePixelClickFromRenderer}
+              />
               <canvas
-                ref={canvasRef}
-                className={cn(
-                  "absolute top-0 left-0",
-                  activeTool === 'cursor' ? 'cursor-move' : 'cursor-crosshair'
-                )}
-                style={{
-                  transform: `scale(${zoom}) translate(${panX / zoom}px, ${panY / zoom}px)`,
-                  transformOrigin: '0 0'
-                }}
-                onMouseMove={handleMouseMove}
-                onMouseDown={handleMouseDown}
-                onMouseUp={handleMouseUp}
-                onDoubleClick={handleDoubleClick}
-                onMouseLeave={() => {
-                  setIsDragging(false);
-                  setCurrentTemp(null);
-                }}
+                ref={overlayCanvasRef}
+                width={activeImage.thermalData.width}
+                height={activeImage.thermalData.height}
+                className="absolute top-0 left-0 pointer-events-none"
+                // Drawing on this canvas will be implemented later if needed for dynamic shapes
               />
               
-              {/* Temperature Tooltip */}
-              {currentTemp !== null && (
+              {/* Temperature Tooltip - uses mousePos (image coordinates) scaled and panned */}
+              {currentTemp !== null && mousePos.x > 0 && mousePos.y > 0 && ( // also check mousePos is valid
                 <div
                   className="absolute bg-black/80 text-white text-xs px-2 py-1 rounded pointer-events-none z-10"
                   style={{
-                    left: mousePos.x * zoom + panX + 10,
-                    top: mousePos.y * zoom + panY - 30
+                    // Position based on image coordinates (mousePos) then apply container's transform
+                    left: mousePos.x + 10 / zoom, // Adjust offset based on zoom for consistent appearance
+                    top: mousePos.y - 30 / zoom,
+                    // The parent div is scaled, so tooltip is positioned relative to unscaled image, then scaled with parent
                   }}
                 >
                   {currentTemp.toFixed(1)}°C
                 </div>
               )}
 
-              {/* Markers Overlay */}
-              {markers.map((marker) => (
+              {/* Markers Overlay - positioned relative to the scaled/panned container */}
+              {markers.filter(m => m.imageId === activeImageId).map((marker) => (
                 <div
                   key={marker.id}
                   className="absolute w-3 h-3 bg-red-500 border-2 border-white rounded-full pointer-events-none"
                   style={{
-                    left: marker.x * zoom + panX - 6,
-                    top: marker.y * zoom + panY - 6,
+                    left: marker.x - 6 / zoom, // Adjust for marker size relative to zoom
+                    top: marker.y - 6 / zoom,
+                    // transform: `scale(${1/zoom})`, // Optionally counter-scale marker size
                   }}
                 />
               ))}
 
-              {/* Regions Overlay */}
-              {regions.map((region) => {
+              {/* Regions Overlay - positioned relative to the scaled/panned container */}
+              {regions.filter(r => r.imageId === activeImageId).map((region) => {
                 if (region.type === 'rectangle' && region.points.length === 2) {
-                  const [p1, p2] = region.points;
-                  const left = Math.min(p1.x, p2.x) * zoom + panX;
-                  const top = Math.min(p1.y, p2.y) * zoom + panY;
-                  const width = Math.abs(p2.x - p1.x) * zoom;
-                  const height = Math.abs(p2.y - p1.y) * zoom;
+                  const [p1, p2] = region.points; // These are image coordinates
+                  const left = Math.min(p1.x, p2.x);
+                  const top = Math.min(p1.y, p2.y);
+                  const width = Math.abs(p2.x - p1.x);
+                  const height = Math.abs(p2.y - p1.y);
                   
                   return (
                     <div
@@ -434,26 +499,33 @@ export default function ThermalViewer() {
                     />
                   );
                 }
+                // TODO: Add rendering for polygon regions if needed
                 return null;
               })}
 
-              {/* Current Drawing Region */}
+              {/* Current Drawing Region - positioned relative to the scaled/panned container */}
               {isDrawing && currentRegion && activeTool === 'rectangle' && currentRegion.points.length === 2 && (
                 <div
                   className="absolute border-2 border-yellow-500 pointer-events-none"
                   style={{
-                    left: Math.min(currentRegion.points[0].x, currentRegion.points[1].x) * zoom + panX,
-                    top: Math.min(currentRegion.points[0].y, currentRegion.points[1].y) * zoom + panY,
-                    width: Math.abs(currentRegion.points[1].x - currentRegion.points[0].x) * zoom,
-                    height: Math.abs(currentRegion.points[1].y - currentRegion.points[0].y) * zoom,
+                    left: Math.min(currentRegion.points[0].x, currentRegion.points[1].x),
+                    top: Math.min(currentRegion.points[0].y, currentRegion.points[1].y),
+                    width: Math.abs(currentRegion.points[1].x - currentRegion.points[0].x),
+                    height: Math.abs(currentRegion.points[1].y - currentRegion.points[0].y),
                     backgroundColor: 'rgba(234, 179, 8, 0.1)'
                   }}
                 />
               )}
-            </>
+              {/* TODO: Add rendering for current polygon drawing if needed */}
+            </div>
           ) : (
-            /* Upload Area */
-            <div className="flex flex-col items-center justify-center h-full text-gray-400">
+            /* Upload Area - remains unchanged, displayed when no activeImage.thermalData */
+            <div
+                className="flex flex-col items-center justify-center h-full text-gray-400"
+                // Ensure drop/dragOver handlers are also on this placeholder
+                onDrop={handleDrop}
+                onDragOver={(e) => e.preventDefault()}
+            >
               <Upload className="w-16 h-16 mb-4" />
               <p className="text-lg mb-2">{t.uploadImage}</p>
               <p className="text-sm mb-4">{t.dragDropHere}</p>
@@ -469,11 +541,13 @@ export default function ThermalViewer() {
         {/* Status Bar */}
         <div className="h-6 bg-gray-750 border-t border-gray-600 flex items-center justify-between px-2 text-xs text-gray-400">
           <div className="flex items-center space-x-4">
-            {currentTemp !== null && (
+            {currentTemp !== null && activeImage?.thermalData && ( // Only show temp if there's an image
               <span>{t.temperature}: {currentTemp.toFixed(1)}°C</span>
             )}
-            <span>X: {Math.round(mousePos.x)}, Y: {Math.round(mousePos.y)}</span>
-            {isDrawing && (
+            {activeImage?.thermalData && ( // Only show coords if there's an image
+              <span>X: {Math.round(mousePos.x)}, Y: {Math.round(mousePos.y)}</span>
+            )}
+            {isDrawing && activeImage?.thermalData && ( // Only show drawing status if there's an image
               <span className="text-yellow-400">Drawing {activeTool}...</span>
             )}
           </div>
@@ -481,8 +555,8 @@ export default function ThermalViewer() {
             <span>{t.palette}: {palette?.name}</span>
             {activeImage?.thermalData && (
               <span>
-                {activeImage.thermalData.minTemp.toFixed(1)}°C - 
-                {activeImage.thermalData.maxTemp.toFixed(1)}°C
+                Min: {(customMinTemp ?? activeImage.thermalData.minTemp).toFixed(1)}°C -
+                Max: {(customMaxTemp ?? activeImage.thermalData.maxTemp).toFixed(1)}°C
               </span>
             )}
           </div>
