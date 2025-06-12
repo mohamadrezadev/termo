@@ -82,9 +82,9 @@ export default function Timeline() {
                       index === currentTimeIndex ? 'border-blue-500' : 'border-gray-600'
                     }`}
                   >
-                    {image.realImage && (
+                    {image.rgbImage && (
                       <img
-                        src={image.realImage}
+                        src={image.rgbImage}
                         alt={`Frame ${index + 1}`}
                         className="w-full h-full object-cover rounded"
                       />

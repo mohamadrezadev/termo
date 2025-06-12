@@ -1,12 +1,12 @@
 # Thermal Analyzer Pro
 
-Thermal Analyzer Pro is a web application for analyzing thermal images. It is built with **Next.js**, **React**, **TypeScript** and **Tailwind CSS**. The interface uses resizable windows so you can view the thermal image, real image, data tables and histograms at the same time.
+Thermal Analyzer Pro is a web application for analyzing thermal images. It is built with **Next.js**, **React**, **TypeScript** and **Tailwind CSS**. The interface uses resizable windows so you can view the thermal image, RGB image, data tables and histograms at the same time.
 
 ## Features
 
 - Upload common thermal image formats and extract temperature data
 - Interactive thermal viewer with color palettes and zoom/pan tools
-- Real image viewer for comparing the visual image with the thermal data
+- RGB image viewer for comparing the visual photo with the thermal data
 - Draw points, lines and regions to measure temperatures
 - Data table and histogram of selected markers or regions
 - Adjustable measurement parameters such as emissivity and ambient temperature
