@@ -21,7 +21,7 @@ export const translations = {
     
     // Window Management
     thermalViewer: "Thermal Viewer",
-    realImageViewer: "Real Image Viewer",
+    rgbImageViewer: "RGB Image Viewer",
     dataTable: "Data Table",
     histogram: "Histogram",
     parameters: "Parameters",
@@ -137,7 +137,7 @@ export const translations = {
     
     // Window Management
     thermalViewer: "نمایشگر حرارتی",
-    realImageViewer: "نمایشگر تصویر واقعی",
+    rgbImageViewer: "نمایشگر تصویر رنگی",
     dataTable: "جدول داده‌ها",
     histogram: "هیستوگرام",
     parameters: "پارامترها",

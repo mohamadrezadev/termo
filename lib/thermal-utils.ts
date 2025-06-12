@@ -21,7 +21,7 @@ export interface ThermalImage {
   id: string;
   name: string;
   thermalData: ThermalData | null;
-  realImage: string | null; // base64 or URL
+  rgbImage: string | null; // base64 or URL
   canvas?: HTMLCanvasElement;
 }
 
@@ -132,7 +132,7 @@ export function extractThermalData(file: File): Promise<ThermalImage> {
           id: Math.random().toString(36).substr(2, 9),
           name: file.name,
           thermalData: mockThermalData,
-          realImage: result as string
+          rgbImage: result as string
         });
       };
       
