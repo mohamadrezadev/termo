@@ -274,6 +274,51 @@ export function extractThermalData(file: File): Promise<ThermalImage> {
         }
 
         let realImageBase64: string | null = null;
+
+        // New logic: Search for JPEG magic number
+        if (hasRealImage) { // Only search if the header flag suggests there might be one
+          const searchOffset = thermalDataEnd; // Start searching after thermal data
+
+          if (searchOffset < dataView.byteLength - 4) { // Ensure there's enough space for magic number + some data
+            const jpegMagic1 = [0xFF, 0xD8, 0xFF, 0xE0]; // Standard JPEG
+            const jpegMagic2 = [0xFF, 0xD8, 0xFF, 0xE1]; // JPEG with EXIF
+            let foundJpegStartIndex = -1;
+
+            console.log(`BMT Parsing: Starting JPEG search from offset ${searchOffset}. File length: ${dataView.byteLength}`);
+
+            for (let i = searchOffset; i <= dataView.byteLength - 4; i++) {
+              // Check for FF D8 FF
+              if (dataView.getUint8(i) === 0xFF &&
+                  dataView.getUint8(i + 1) === 0xD8 &&
+                  dataView.getUint8(i + 2) === 0xFF) {
+                const fourthByte = dataView.getUint8(i + 3);
+                // Check if fourth byte is E0 or E1
+                if (fourthByte === 0xE0 || fourthByte === 0xE1) {
+                  foundJpegStartIndex = i;
+                  break;
+                }
+              }
+            }
+
+            if (foundJpegStartIndex !== -1) {
+              // JPEG found, extract from foundJpegStartIndex to the end of the file
+              const jpegDataArrayBuffer = arrayBuffer.slice(foundJpegStartIndex);
+              const base64Data = arrayBufferToBase64(jpegDataArrayBuffer);
+              realImageBase64 = `data:image/jpeg;base64,${base64Data}`;
+              console.log(`BMT Parsing: Found embedded JPEG at offset ${foundJpegStartIndex} by magic number. Extracted length: ${jpegDataArrayBuffer.byteLength}`);
+            } else {
+              console.log(`BMT Parsing: hasRealImage flag was set, but no JPEG magic number (FFD8FFE0 or FFD8FFE1) found after thermal data. Search started at offset: ${searchOffset}.`);
+            }
+          } else {
+            console.log(`BMT Parsing: Not enough data after thermal data to search for JPEG. Search offset: ${searchOffset}. File length: ${dataView.byteLength}`);
+          }
+        } else {
+            console.log("BMT Parsing: hasRealImage flag is false. Skipping JPEG search.");
+        }
+
+        /*
+        // Old logic for realImageBase64 extraction:
+        // Kept for reference, replaced by magic number search
         if (hasRealImage && realImageDataBaseOffset > 0 && realImageDataBaseOffset < dataView.byteLength) {
             if (realImageDataBaseOffset < thermalDataEnd) { // Basic sanity check for offset
                 throw new Error(`BMT_PARSE_ERROR: realImageDataBaseOffset ${realImageDataBaseOffset} overlaps with thermal data ending at ${thermalDataEnd}`);
@@ -297,9 +342,7 @@ export function extractThermalData(file: File): Promise<ThermalImage> {
             const realImageLength = dataView.getUint32(realMetaOffset, true);
             realMetaOffset += 4; // End of real image metadata, realMetaOffset is realImageDataBaseOffset + 9
 
-            // The problem description stated "Read Length of Real Image Data bytes starting from Real Image Data Offset + 20"
-            // This implies real image metadata is 20 bytes. Let's stick to this for data start.
-            const realImageDataStart = realImageDataBaseOffset + 20;
+            const realImageDataStart = realImageDataBaseOffset + 20; // As per original spec
             checkBoundary(realImageDataStart, realImageLength, "Real Image Data");
 
             const realImageDataBuffer = arrayBuffer.slice(realImageDataStart, realImageDataStart + realImageLength);
@@ -312,6 +355,7 @@ export function extractThermalData(file: File): Promise<ThermalImage> {
               console.warn(`BMT Parsing: Unknown real image format: ${realImageFormat}`);
             }
         }
+        */
 
         resolve({
             id: Math.random().toString(36).substr(2, 9),
