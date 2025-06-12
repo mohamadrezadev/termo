@@ -5,7 +5,7 @@ import { useAppStore } from '@/lib/store';
 import { translations } from '@/lib/translations';
 import { COLOR_PALETTES } from '@/lib/thermal-utils';
 import Window from './Window';
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell } from 'recharts';
 
 export default function Histogram() {
   const {
@@ -135,7 +135,11 @@ export default function Histogram() {
                   <Bar 
                     dataKey="count" 
                     stroke="none"
-                  />
+                  >
+                    {histogramData.data?.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
