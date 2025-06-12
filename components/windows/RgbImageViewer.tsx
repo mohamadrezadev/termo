@@ -30,7 +30,10 @@ export default function RgbImageViewer() {
 
   const t = translations[language];
   const imageRef = useRef<HTMLImageElement>(null);
+codex/ویرایش-نمایش-تصویر-real_image-و-thermal
   const [fusionMode, setFusionMode] = useState<'rgb' | 'overlay' | 'edge'>('rgb');
+=======
+
   const [overlayOpacity, setOverlayOpacity] = useState(50);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -63,7 +66,10 @@ export default function RgbImageViewer() {
   };
 
   const fusionModes = [
+ codex/ویرایش-نمایش-تصویر-real_image-و-thermal
     { id: 'rgb', icon: Eye, name: 'RGB' },
+=======
+
     { id: 'overlay', icon: Layers, name: 'Overlay' },
     { id: 'edge', icon: EyeOff, name: 'Edge Fusion' },
   ];
@@ -150,7 +156,10 @@ export default function RgbImageViewer() {
               onMouseLeave={handleMouseUp}
             >
               {/* Show RGB image if available, otherwise show thermal */}
+ codex/ویرایش-نمایش-تصویر-real_image-و-thermal
               {(fusionMode === 'rgb' || fusionMode === 'overlay') && activeImage.rgbImage ? (
+=======
+
                 <img
                   ref={imageRef}
                   src={activeImage.rgbImage}
@@ -166,7 +175,10 @@ export default function RgbImageViewer() {
               ) : null}
               
               {/* Show thermal image */}
+ codex/ویرایش-نمایش-تصویر-real_image-و-thermal
               {fusionMode === 'overlay' && activeImage.canvas && (
+=======
+
                 <canvas
                   className="absolute top-0 left-0 max-w-none pointer-events-none"
                   style={{
@@ -192,7 +204,10 @@ export default function RgbImageViewer() {
               )}
 
               {/* Fallback if no RGB image */}
+ codex/ویرایش-نمایش-تصویر-real_image-و-thermal
               {!activeImage.rgbImage && fusionMode === 'rgb' && (
+=======
+
                 <div className="flex items-center justify-center h-full text-gray-400">
                   <div className="text-center">
                     <ImageIcon className="w-16 h-16 mx-auto mb-4" />
