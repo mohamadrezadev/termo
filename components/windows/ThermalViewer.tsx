@@ -430,16 +430,32 @@ export default function ThermalViewer() {
                 position: 'relative', // For absolute positioning of overlays
               }}
             >
-              <ThermalImageRenderer
-                thermalData={activeImage.thermalData}
-                colorPalette={palette}
-                temperatureScale={{
-                  min: customMinTemp ?? activeImage.thermalData.minTemp,
-                  max: customMaxTemp ?? activeImage.thermalData.maxTemp,
-                }}
-                onPixelHover={handlePixelHoverFromRenderer}
-                onPixelClick={handlePixelClickFromRenderer}
-              />
+              {activeImage.preRenderedThermalUrl ? (
+                <img
+                  src={activeImage.preRenderedThermalUrl}
+                  alt={t.thermalImage}
+                  style={{
+                    width: '100%', // Fill the container defined by thermalData.width/height
+                    height: '100%',
+                    objectFit: 'contain', // Ensure aspect ratio is maintained
+                    imageRendering: 'pixelated', // Good for thermal images
+                  }}
+                  // Mouse events for temperature reading might need to be adapted if we want them on the pre-rendered image.
+                  // For now, they will be disabled for pre-rendered images as per current logic (onPixelHover, onPixelClick are props of ThermalImageRenderer).
+                  // If needed, a wrapper div or direct event handlers on <img> could be added to get mouse coordinates.
+                />
+              ) : (
+                <ThermalImageRenderer
+                  thermalData={activeImage.thermalData}
+                  colorPalette={palette}
+                  temperatureScale={{
+                    min: customMinTemp ?? activeImage.thermalData.minTemp,
+                    max: customMaxTemp ?? activeImage.thermalData.maxTemp,
+                  }}
+                  onPixelHover={handlePixelHoverFromRenderer}
+                  onPixelClick={handlePixelClickFromRenderer}
+                />
+              )}
               <canvas
                 ref={overlayCanvasRef}
                 width={activeImage.thermalData.width}
