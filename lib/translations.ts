@@ -37,7 +37,6 @@ export const translations = {
     circle: "Circle",
     polygon: "Polygon",
     isotherm: "Isotherm",
-    distance: "Distance",
     angle: "Angle",
     
     // Image Controls
@@ -153,7 +152,6 @@ export const translations = {
     circle: "دایره",
     polygon: "چندضلعی",
     isotherm: "ایزوترم",
-    distance: "فاصله",
     angle: "زاویه",
     
     // Image Controls
