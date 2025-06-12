@@ -82,7 +82,7 @@ export default function Reports() {
                   }
                 />
                 <Label htmlFor="include-images" className="text-sm">
-                  Thermal & Real Images ({images.length})
+                  Thermal & RGB Images ({images.length})
                 </Label>
               </div>
 
