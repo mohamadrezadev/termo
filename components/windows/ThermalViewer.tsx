@@ -86,23 +86,32 @@ export default function ThermalViewer() {
 
   useEffect(() => {
     const canvas = mainCanvasRef.current;
-    if (canvas && activeImage?.thermalData && palette) {
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    if (activeImage?.preRenderedThermalUrl) {
+      const img = new Image();
+      img.onload = () => {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+      };
+      img.src = activeImage.preRenderedThermalUrl;
+    } else if (activeImage?.thermalData && palette) {
       console.log('[THERMAL_VIEWER] Rendering thermal image to main canvas.');
       renderThermalCanvas(
         canvas,
         activeImage.thermalData,
-        palette, // This is COLOR_PALETTES[currentPalette]
+        palette,
         customMinTemp ?? activeImage.thermalData.minTemp,
         customMaxTemp ?? activeImage.thermalData.maxTemp
       );
-    } else if (canvas && !activeImage?.thermalData) {
-      // Clear canvas if no image
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-      }
+    } else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
-  }, [activeImage, palette, customMinTemp, customMaxTemp]); // Dependencies: activeImage, palette, and temp overrides
+  }, [activeImage, palette, customMinTemp, customMaxTemp]);
 
 const handleFileUpload = useCallback(async (files: FileList) => {
   for (let i = 0; i < files.length; i++) {
@@ -134,6 +143,7 @@ const handleFileUpload = useCallback(async (files: FileList) => {
           name: file.name,
           thermalData,
           realImage: real?.url ?? null,
+          preRenderedThermalUrl: thermal.url,
         };
         addImage(newImage);
         setActiveImage(newImage.id);
