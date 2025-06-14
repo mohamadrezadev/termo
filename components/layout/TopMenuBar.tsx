@@ -9,9 +9,6 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
   File,
@@ -21,7 +18,6 @@ import {
   Download,
   FileText,
   Eye,
-  Settings,
   Monitor,
   RotateCcw,
   Languages,
@@ -115,21 +111,6 @@ export default function TopMenuBar() {
               <Eye className="w-4 h-4 mr-2" />
               {t.fullscreen}
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <Settings className="w-4 h-4 mr-2" />
-                {t.palette}
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent>
-                <DropdownMenuItem>{t.iron}</DropdownMenuItem>
-                <DropdownMenuItem>{t.rainbow}</DropdownMenuItem>
-                <DropdownMenuItem>{t.grayscale}</DropdownMenuItem>
-                <DropdownMenuItem>{t.sepia}</DropdownMenuItem>
-                <DropdownMenuItem>{t.medical}</DropdownMenuItem>
-                <DropdownMenuItem>{t.coldHot}</DropdownMenuItem>
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
           </DropdownMenuContent>
         </DropdownMenu>
 

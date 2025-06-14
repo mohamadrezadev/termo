@@ -725,7 +725,6 @@ const handleFileUpload = useCallback(async (files: FileList) => {
             )}
           </div>
           <div className="flex items-center space-x-4">
-            <span>{t.palette}: {palette?.name}</span>
             {activeImage?.thermalData && (
               <span>
                 Min: {(customMinTemp ?? activeImage.thermalData.minTemp).toFixed(1)}°C -

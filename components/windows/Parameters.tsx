@@ -2,32 +2,22 @@
 
 import { useAppStore } from '@/lib/store';
 import { translations } from '@/lib/translations';
-import { COLOR_PALETTES } from '@/lib/thermal-utils';
 import Window from './Window';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Settings, Palette } from 'lucide-react';
+import { Settings } from 'lucide-react';
 
 export default function Parameters() {
   const {
     language,
-    currentPalette,
     customMinTemp,
     customMaxTemp,
     globalParameters,
     images,
     activeImageId,
-    setPalette,
     setTemperatureRange,
     updateGlobalParameters
   } = useAppStore();
@@ -35,9 +25,6 @@ export default function Parameters() {
   const t = translations[language];
   const activeImage = images.find(img => img.id === activeImageId);
 
-  const handlePaletteChange = (palette: string) => {
-    setPalette(palette);
-  };
 
   const handleTemperatureRangeChange = (type: 'min' | 'max', value: string) => {
     const numValue = parseFloat(value) || null;
@@ -59,41 +46,6 @@ export default function Parameters() {
   return (
     <Window id="parameters" title={t.parameters} minWidth={250} minHeight={400}>
       <div className="flex flex-col h-full p-4 space-y-6 overflow-auto">
-        {/* Color Palette Section */}
-        <div className="space-y-3">
-          <div className="flex items-center space-x-2">
-            <Palette className="w-4 h-4" />
-            <h3 className="text-sm font-medium">{t.palette}</h3>
-          </div>
-          
-          <Select value={currentPalette} onValueChange={handlePaletteChange}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.entries(COLOR_PALETTES).map(([key, palette]) => (
-                <SelectItem key={key} value={key}>
-                  <div className="flex items-center space-x-2">
-                    <div 
-                      className="w-4 h-4 rounded"
-                      style={{
-                        background: `linear-gradient(to right, ${palette.colors.slice(0, 3).join(', ')})`
-                      }}
-                    />
-                    <span>{palette.name}</span>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* Color Preview */}
-          <div className="h-6 rounded border" style={{
-            background: `linear-gradient(to right, ${COLOR_PALETTES[currentPalette]?.colors.join(', ')})`
-          }} />
-        </div>
-
-        <Separator />
 
         {/* Temperature Range Section */}
         <div className="space-y-3">
