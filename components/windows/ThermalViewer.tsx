@@ -71,35 +71,23 @@ export default function ThermalViewer() {
   const handleFileUpload = useCallback(async (files: FileList) => {
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      let response; // Declare response variable here to be used by both paths
+      let response;
 
       try {
-        if (typeof file.stream === 'function') {
-          // Use streaming upload
-          console.log(`Uploading ${file.name} using stream...`);
-          response = await fetch('/api/extract-bmps', {
-            method: 'POST',
-            body: file.stream(),
-            headers: {
-              'Content-Type': file.type || 'application/octet-stream',
-              'X-File-Name': encodeURIComponent(file.name) // Ensure filename is safely encoded
-            },
-            duplex: 'half' // Added for streaming request
-          });
-        } else {
-          // Fallback to FormData
-          console.log(`Uploading ${file.name} using FormData...`);
-          const formData = new FormData();
-          formData.append('bmtfile', file);
-          response = await fetch('/api/extract-bmps', {
-            method: 'POST',
-            body: formData,
-          });
-        }
+        // Always use FormData
+        console.log(`Uploading ${file.name} using FormData...`);
+        const formData = new FormData();
+        formData.append('bmtfile', file); // 'bmtfile' is the field name server expects
+        response = await fetch('/api/extract-bmps', {
+          method: 'POST',
+          body: formData,
+          // No 'Content-Type' header needed here; browser sets it for FormData
+          // No 'X-File-Name' header needed here as multer gets filename from FormData
+          // No 'duplex: 'half'' needed here
+        });
 
         if (!response.ok) {
-          // Try to get error message from server response body
-          const errorData = await response.json().catch(() => null); // Catch if response isn't valid JSON
+          const errorData = await response.json().catch(() => null);
           throw new Error(`Server error: ${response.status} ${response.statusText}. ${errorData?.message ? `Details: ${errorData.message}` : ''}`);
         }
 
@@ -141,10 +129,16 @@ export default function ThermalViewer() {
 
       } catch (error) {
         console.error('Failed to upload or process file:', file.name, error);
-        // Optionally, display a user-friendly error message here
+        // Potentially add a more user-friendly error message to the UI here
+        // For "TypeError: Failed to fetch", could suggest checking network/server status.
+        if (error instanceof TypeError && error.message === 'Failed to fetch') {
+            // Log a more specific message or update UI state to inform user
+            console.error(`Network error or server unreachable while trying to upload ${file.name}. Please check your connection and if the server is running.`);
+        }
       }
     }
-  }, [addImage, setActiveImage]); // addImage and setActiveImage are kept for now, will be used later
+  }, [addImage, setActiveImage]);
+
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
