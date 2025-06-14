@@ -1,15 +1,9 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import dynamic from 'next/dynamic';
+import { ThemeProvider } from '@/components/theme-provider';
 
 const inter = Inter({ subsets: ['latin'] });
-
-// Dynamically import ThemeProvider to avoid SSR issues
-const ThemeProvider = dynamic(
-  () => import('@/components/theme-provider').then((mod) => ({ default: mod.ThemeProvider })),
-  { ssr: false }
-);
 
 export const metadata: Metadata = {
   title: 'Thermal Analyzer Pro - Advanced Thermal Image Analysis',
