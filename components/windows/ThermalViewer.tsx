@@ -110,39 +110,83 @@ const handleFileUpload = useCallback(async (files: FileList) => {
 
     try {
       const formData = new FormData();
-      formData.append('file', file); // ✅ corrected
+      formData.append('file', file);
 
       const res = await fetch('http://localhost:8000/api/extract-bmps-py', {
         method: 'POST',
         body: formData,
       });
 
+      // It's good practice to check for res.ok before calling res.json()
+      if (!res.ok) {
+        // Try to get error message from server response body if possible
+        let errorMsg = `Server error: ${res.status} ${res.statusText}`;
+        try {
+            const errorResult = await res.json();
+            errorMsg = errorResult.message || errorMsg;
+        } catch (jsonError) {
+            // Could not parse JSON body, stick with status text
+        }
+        throw new Error(errorMsg);
+      }
+
       const result = await res.json();
 
-      if (!res.ok || !result.success) {
-        throw new Error(result.message || 'Server error');
+      if (!result.success) { // Assuming server sends { success: false, message: "..." }
+        throw new Error(result.message || 'Server processing failed');
       }
 
-      // Use result.images for thermal/real image
-      const thermal = result.images.find((img: any) => img.type === 'thermal');
-      const real = result.images.find((img: any) => img.type === 'real');
+      const thermalResult = result.images?.find((img: any) => img.type === 'thermal');
+      const realResult = result.images?.find((img: any) => img.type === 'real');
 
-      if (thermal) {
-        const thermalData = await processThermalBmpFromServer(thermal.url);
+      // Proceed if either a thermal or a real image URL is found
+      if (thermalResult?.url || realResult?.url) {
+        let thermalData: ThermalData | null = null;
+        if (thermalResult?.url) {
+          try {
+            console.log(`[UPLOAD] Processing thermal image from URL: ${thermalResult.url}`);
+            thermalData = await processThermalBmpFromServer(thermalResult.url);
+          } catch (thermalErr) {
+            console.error(`[UPLOAD] Failed to process thermal image from ${thermalResult.url}:`, thermalErr);
+            // thermalData remains null, which is acceptable
+          }
+        } else {
+          console.log('[UPLOAD] No thermal image URL found in server response.');
+        }
+
+        const realImageUrl = realResult?.url ?? null;
+        if (!realImageUrl) {
+            console.log('[UPLOAD] No real image URL found in server response.');
+        } else {
+            console.log(`[UPLOAD] Real image URL from server: ${realImageUrl}`);
+        }
+
+        const newImageId = generateId();
         const newImage: ThermalImage = {
-          id: generateId(),
+          id: newImageId,
           name: file.name,
-          thermalData,
-          realImage: real?.url ?? null,
+          thermalData: thermalData, // Can be null if thermal processing failed or no URL
+          realImage: realImageUrl,   // Can be null if no real image URL
         };
+
+        console.log('[UPLOAD] Adding new image to store:', newImage);
         addImage(newImage);
-        setActiveImage(newImage.id);
+        setActiveImage(newImage.id); // Set as active even if some parts are missing
+
+      } else {
+        // Neither thermal nor real image URL was found in the server response
+        console.warn('[UPLOAD] Server response did not contain thermal or real image URLs for file:', file.name, result);
+        // Optionally, inform the user here if desired, e.g., using a toast notification
+        // For now, just logging to console.
+        throw new Error('Server did not return valid image URLs.');
       }
-    } catch (err) {
-      console.error('Upload failed:', err);
+    } catch (err: any) { // Explicitly type err
+      console.error('[UPLOAD] File upload or processing failed for file:', file.name, err);
+      // Here you might want to show an error to the user, e.g., using a toast notification system
+      // For example: toast.error(`Upload failed for ${file.name}: ${err.message}`);
     }
   }
-}, [addImage, setActiveImage]);
+}, [addImage, setActiveImage, generateId, processThermalBmpFromServer]); // Added generateId and processThermalBmpFromServer to dependencies
  
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();

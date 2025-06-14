@@ -82,10 +82,13 @@ export const COLOR_PALETTES: Record<string, ColorPalette> = {
   }
 };
 
+const LOW_CONTRAST_THRESHOLD = 0.1; // Threshold for very low thermal contrast
+
 export function interpolateColor(value: number, min: number, max: number, palette: ColorPalette): string {
-  if (max === min) {
-    // If min and max are equal, return the middle color of the palette
+  if (max === min || (max - min) < LOW_CONTRAST_THRESHOLD) {
+    // If min and max are equal, or contrast is very low, return the middle color of the palette
     // This prevents uniform temperature images from always being the first color (e.g., black)
+    // and handles very low contrast scenarios more gracefully.
     return palette.colors[Math.floor(palette.colors.length / 2)];
   }
   
@@ -260,262 +263,11 @@ export function extractThermalData(file: File): Promise<ThermalImage> {
         return; // Important: return after handling BMP
       }
 
-      // Existing non-BMP logic starts here
-      const dataView = new DataView(arrayBuffer);
-      const textDecoder = new TextDecoder('ascii');
-
-      const checkBoundary = (offset: number, length: number, sectionName: string) => {
-        if (offset + length > dataView.byteLength) {
-          throw new Error(`BMT_PARSE_ERROR: Unexpected end of file while reading ${sectionName}. Needed ${offset + length}, have ${dataView.byteLength}`);
-        }
-      };
-
-      // Check for BMTF Magic Number
-      try {
-        checkBoundary(0, 4, "Magic Number");
-        if (textDecoder.decode(new Uint8Array(arrayBuffer, 0, 4)) !== 'BMTF') {
-          console.log("File is not a BMTF format (magic number mismatch). Attempting fallback.");
-          fallbackToImageRead(file, resolve, reject);
-          return;
-        }
-      } catch (e: any) {
-        // This catch is primarily for boundary check on magic number itself
-        console.error("BMT Parsing Error: Could not read magic number.", e.message);
-        fallbackToImageRead(file, resolve, reject);
-        return;
-      }
+      // Fallback for non-BMP files (e.g., JPG, PNG directly uploaded to client)
+      console.log(`File ${file.name} is not a BMP. Attempting fallback to generic image read.`);
+      fallbackToImageRead(file, resolve, reject);
       
-      try {
-        // File Header Parsing
-        let currentOffset = 4; // Start after magic number
-
-        checkBoundary(currentOffset, 2, "Format Version");
-        const formatVersion = dataView.getUint16(currentOffset, true);
-        currentOffset += 2;
-
-        checkBoundary(currentOffset, 1, "File Flags");
-        const fileFlags = dataView.getUint8(currentOffset);
-        currentOffset += 1;
-        const hasRealImage = (fileFlags & 0x01) === 1;
-
-        checkBoundary(currentOffset, 8, "Timestamp");
-        const timestampBigInt = dataView.getBigInt64(currentOffset, true);
-        const timestamp = new Date(Number(timestampBigInt));
-        currentOffset += 8;
-
-        checkBoundary(currentOffset, 4, "Thermal Data Offset");
-        const thermalDataOffset = dataView.getUint32(currentOffset, true);
-        currentOffset += 4;
-
-        checkBoundary(currentOffset, 4, "Real Image Data Offset");
-        const realImageDataBaseOffset = dataView.getUint32(currentOffset, true);
-        currentOffset += 4; // End of header, currentOffset is now 23
-
-        if (thermalDataOffset === 0 || thermalDataOffset >= dataView.byteLength) {
-            throw new Error(`BMT_PARSE_ERROR: Invalid thermalDataOffset: ${thermalDataOffset}`);
-        }
-
-
-        // Thermal Image Metadata Section
-        let thermalMetaOffset = thermalDataOffset;
-        
-        checkBoundary(thermalMetaOffset, 2, "Thermal Image Width");
-        const thermalImageWidth = dataView.getUint16(thermalMetaOffset, true);
-        thermalMetaOffset += 2;
-
-        checkBoundary(thermalMetaOffset, 2, "Thermal Image Height");
-        const thermalImageHeight = dataView.getUint16(thermalMetaOffset, true);
-        thermalMetaOffset += 2;
-
-        checkBoundary(thermalMetaOffset, 1, "Temperature Unit");
-        const temperatureUnit = dataView.getUint8(thermalMetaOffset); // 0: C, 1: F, 2: K
-        thermalMetaOffset += 1;
-
-        checkBoundary(thermalMetaOffset, 1, "Data Type for Temperatures");
-        const dataTypeForTemperatures = dataView.getUint8(thermalMetaOffset); // 0: Float32, 1: Uint16
-        thermalMetaOffset += 1;
-
-        checkBoundary(thermalMetaOffset, 4, "Min Temperature Value");
-        const minTempValue = dataView.getFloat32(thermalMetaOffset, true);
-        thermalMetaOffset += 4;
-
-        checkBoundary(thermalMetaOffset, 4, "Max Temperature Value");
-        const maxTempValue = dataView.getFloat32(thermalMetaOffset, true);
-        thermalMetaOffset += 4;
-
-        checkBoundary(thermalMetaOffset, 4, "Emissivity");
-        const emissivity = dataView.getFloat32(thermalMetaOffset, true);
-        thermalMetaOffset += 4;
-
-        checkBoundary(thermalMetaOffset, 4, "Ambient Temperature");
-        const ambientTemperature = dataView.getFloat32(thermalMetaOffset, true);
-        thermalMetaOffset += 4;
-
-        checkBoundary(thermalMetaOffset, 4, "Reflected Temperature");
-        const reflectedTemperature = dataView.getFloat32(thermalMetaOffset, true);
-        thermalMetaOffset += 4;
-
-        checkBoundary(thermalMetaOffset, 2, "Humidity");
-        const humidity = dataView.getUint16(thermalMetaOffset, true);
-        thermalMetaOffset += 2;
-
-        checkBoundary(thermalMetaOffset, 4, "Distance");
-        const distance = dataView.getFloat32(thermalMetaOffset, true);
-        thermalMetaOffset += 4;
-
-        checkBoundary(thermalMetaOffset, 32, "Camera Model String");
-        const cameraModelBytes = new Uint8Array(arrayBuffer, thermalMetaOffset, 32);
-        const cameraModelNullIndex = cameraModelBytes.indexOf(0);
-        const cameraModel = textDecoder.decode(cameraModelBytes.slice(0, cameraModelNullIndex > -1 ? cameraModelNullIndex : 32));
-        thermalMetaOffset += 32; // End of thermal metadata, thermalMetaOffset is thermalDataOffset + 64 (assuming 32+4+2+4+4+4+4+1+1+2+2 = 60, oops, example metadata was 128 bytes)
-        // Correcting based on individual reads, the total size of metadata read is 2+2+1+1+4+4+4+4+4+2+4+32 = 64 bytes.
-        // The problem description stated "Thermal Image Metadata Section (at Thermal Data Offset, assume 128 bytes total for this example)"
-        // And then "Thermal Image Data Section (immediately after thermal metadata): Calculate data start: Thermal Data Offset + 128"
-        // So we should use thermalDataOffset + 128 for thermalDataStart, regardless of actual metadata bytes read, to match spec.
-
-        // Thermal Image Data Section
-        const thermalDataStart = thermalDataOffset + 128; // As per spec
-        const bytesPerPixel = dataTypeForTemperatures === 0 ? 4 : 2;
-        const thermalDataEnd = thermalDataStart + (thermalImageWidth * thermalImageHeight * bytesPerPixel);
-        checkBoundary(thermalDataStart, (thermalImageWidth * thermalImageHeight * bytesPerPixel), "Thermal Image Data");
-
-        const temperatureMatrix: number[][] = [];
-        let minTempActual = Infinity;
-        let maxTempActual = -Infinity;
-
-        for (let y = 0; y < thermalImageHeight; y++) {
-          const row: number[] = [];
-          for (let x = 0; x < thermalImageWidth; x++) {
-            const dataIdx = thermalDataStart + (y * thermalImageWidth + x) * bytesPerPixel;
-            // Boundary check for each pixel read is too granular and slow, covered by the block check above.
-            let temp: number;
-            if (dataTypeForTemperatures === 0) { // Float32
-              temp = dataView.getFloat32(dataIdx, true);
-            } else { // Uint16, scaled
-              temp = dataView.getUint16(dataIdx, true) / 100.0;
-            }
-            row.push(temp);
-            minTempActual = Math.min(minTempActual, temp);
-            maxTempActual = Math.max(maxTempActual, temp);
-          }
-          temperatureMatrix.push(row);
-        }
-
-        let realImageBase64: string | null = null;
-
-        // New logic: Search for JPEG magic number
-        if (hasRealImage) { // Only search if the header flag suggests there might be one
-          const searchOffset = thermalDataEnd; // Start searching after thermal data
-
-          if (searchOffset < dataView.byteLength - 4) { // Ensure there's enough space for magic number + some data
-            const jpegMagic1 = [0xFF, 0xD8, 0xFF, 0xE0]; // Standard JPEG
-            const jpegMagic2 = [0xFF, 0xD8, 0xFF, 0xE1]; // JPEG with EXIF
-            let foundJpegStartIndex = -1;
-
-            console.log(`BMT Parsing: Starting JPEG search from offset ${searchOffset}. File length: ${dataView.byteLength}`);
-
-            for (let i = searchOffset; i <= dataView.byteLength - 4; i++) {
-              // Check for FF D8 FF
-              if (dataView.getUint8(i) === 0xFF &&
-                  dataView.getUint8(i + 1) === 0xD8 &&
-                  dataView.getUint8(i + 2) === 0xFF) {
-                const fourthByte = dataView.getUint8(i + 3);
-                // Check if fourth byte is E0 or E1
-                if (fourthByte === 0xE0 || fourthByte === 0xE1) {
-                  foundJpegStartIndex = i;
-                  break;
-                }
-              }
-            }
-
-            if (foundJpegStartIndex !== -1) {
-              // JPEG found, extract from foundJpegStartIndex to the end of the file
-              const jpegDataArrayBuffer = arrayBuffer.slice(foundJpegStartIndex);
-              const base64Data = arrayBufferToBase64(jpegDataArrayBuffer);
-              realImageBase64 = `data:image/jpeg;base64,${base64Data}`;
-              console.log(`BMT Parsing: Found embedded JPEG at offset ${foundJpegStartIndex} by magic number. Extracted length: ${jpegDataArrayBuffer.byteLength}`);
-            } else {
-              console.log(`BMT Parsing: hasRealImage flag was set, but no JPEG magic number (FFD8FFE0 or FFD8FFE1) found after thermal data. Search started at offset: ${searchOffset}.`);
-            }
-          } else {
-            console.log(`BMT Parsing: Not enough data after thermal data to search for JPEG. Search offset: ${searchOffset}. File length: ${dataView.byteLength}`);
-          }
-        } else {
-            console.log("BMT Parsing: hasRealImage flag is false. Skipping JPEG search.");
-        }
-
-        /*
-        // Old logic for realImageBase64 extraction:
-        // Kept for reference, replaced by magic number search
-        if (hasRealImage && realImageDataBaseOffset > 0 && realImageDataBaseOffset < dataView.byteLength) {
-            if (realImageDataBaseOffset < thermalDataEnd) { // Basic sanity check for offset
-                throw new Error(`BMT_PARSE_ERROR: realImageDataBaseOffset ${realImageDataBaseOffset} overlaps with thermal data ending at ${thermalDataEnd}`);
-            }
-
-            let realMetaOffset = realImageDataBaseOffset;
-
-            checkBoundary(realMetaOffset, 2, "Real Image Width");
-            const realImageWidth = dataView.getUint16(realMetaOffset, true);
-            realMetaOffset += 2;
-
-            checkBoundary(realMetaOffset, 2, "Real Image Height");
-            const realImageHeight = dataView.getUint16(realMetaOffset, true);
-            realMetaOffset += 2;
-
-            checkBoundary(realMetaOffset, 1, "Real Image Format");
-            const realImageFormat = dataView.getUint8(realMetaOffset); // 0: JPEG, 1: PNG
-            realMetaOffset += 1;
-
-            checkBoundary(realMetaOffset, 4, "Length of Real Image Data");
-            const realImageLength = dataView.getUint32(realMetaOffset, true);
-            realMetaOffset += 4; // End of real image metadata, realMetaOffset is realImageDataBaseOffset + 9
-
-            const realImageDataStart = realImageDataBaseOffset + 20; // As per original spec
-            checkBoundary(realImageDataStart, realImageLength, "Real Image Data");
-
-            const realImageDataBuffer = arrayBuffer.slice(realImageDataStart, realImageDataStart + realImageLength);
-            const base64Data = arrayBufferToBase64(realImageDataBuffer);
-            if (realImageFormat === 0) {
-              realImageBase64 = `data:image/jpeg;base64,${base64Data}`;
-            } else if (realImageFormat === 1) {
-              realImageBase64 = `data:image/png;base64,${base64Data}`;
-            } else {
-              console.warn(`BMT Parsing: Unknown real image format: ${realImageFormat}`);
-            }
-        }
-        */
-
-        resolve({
-            id: generateId(),
-            name: file.name,
-            thermalData: {
-              width: thermalImageWidth,
-              height: thermalImageHeight,
-              temperatureMatrix,
-              minTemp: minTempActual, // Use actual min/max from data
-              maxTemp: maxTempActual,
-              metadata: {
-                emissivity,
-                ambientTemp: ambientTemperature,
-                reflectedTemp: reflectedTemperature,
-                humidity: humidity / 100, // Assuming humidity is stored as value*100
-                distance,
-                cameraModel,
-                timestamp,
-                // temperatureUnit can be stored if needed
-              },
-            },
-            realImage: realImageBase64,
-          });
-
-        } catch (error) {
-          console.error("Error parsing BMT file:", error);
-          // Fallback for parsing errors within BMT structure or if specific BMT_PARSE_ERROR was thrown
-          console.error("BMT Parsing Error:", (error as Error).message);
-          fallbackToImageRead(file, resolve, reject);
-        }
-      // Removed the specific 'else' for magic number, as it's handled inside the first try-catch.
-    };
+    }; // end of reader.onload
 
     reader.onerror = () => reject(new Error('Failed to read file initially'));
     reader.readAsArrayBuffer(file); // Read as ArrayBuffer for BMT parsing
@@ -914,6 +666,7 @@ export async function processThermalBmpFromServer(imageUrl: string): Promise<The
         }
     }
 
+    console.log(`[processThermalBmpFromServer] Processed: ${imageUrl}, Width: ${img.width}, Height: ${img.height}, MinTemp: ${minTemp}, MaxTemp: ${maxTemp}`);
     // Return ThermalData
     return {
       width: img.width,
