@@ -9,10 +9,11 @@ import {
   COLOR_PALETTES,
   ThermalData, // Added for prop typing
   processThermalBmpFromServer,
-  ThermalImage // For constructing the new image object
+  ThermalImage, // For constructing the new image object
+  renderThermalCanvas // Ensure this is imported
 } from '@/lib/thermal-utils';
 import Window from './Window';
-import ThermalImageRenderer from './ThermalImageRenderer'; // Import the new component
+// import ThermalImageRenderer from './ThermalImageRenderer'; // Import the new component
 import { Button } from '@/components/ui/button';
 import { 
   MousePointer, 
@@ -53,7 +54,7 @@ export default function ThermalViewer() {
   } = useAppStore();
 
   const t = translations[language];
-  // const canvasRef = useRef<HTMLCanvasElement>(null); // Will be removed
+  const mainCanvasRef = useRef<HTMLCanvasElement>(null); // Added this line
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null); // New overlay canvas
   const containerRef = useRef<HTMLDivElement>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 }); // Will store image coordinates
@@ -82,45 +83,110 @@ export default function ThermalViewer() {
   }, [activeImage]);
 
   // renderThermal and its useEffect will be removed, handled by ThermalImageRenderer
+
+  useEffect(() => {
+    const canvas = mainCanvasRef.current;
+    if (canvas && activeImage?.thermalData && palette) {
+      console.log('[THERMAL_VIEWER] Rendering thermal image to main canvas.');
+      renderThermalCanvas(
+        canvas,
+        activeImage.thermalData,
+        palette, // This is COLOR_PALETTES[currentPalette]
+        customMinTemp ?? activeImage.thermalData.minTemp,
+        customMaxTemp ?? activeImage.thermalData.maxTemp
+      );
+    } else if (canvas && !activeImage?.thermalData) {
+      // Clear canvas if no image
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+    }
+  }, [activeImage, palette, customMinTemp, customMaxTemp]); // Dependencies: activeImage, palette, and temp overrides
+
 const handleFileUpload = useCallback(async (files: FileList) => {
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
 
     try {
       const formData = new FormData();
-      formData.append('file', file); // ✅ corrected
+      formData.append('file', file);
 
       const res = await fetch('http://localhost:8000/api/extract-bmps-py', {
         method: 'POST',
         body: formData,
       });
 
+      // It's good practice to check for res.ok before calling res.json()
+      if (!res.ok) {
+        // Try to get error message from server response body if possible
+        let errorMsg = `Server error: ${res.status} ${res.statusText}`;
+        try {
+            const errorResult = await res.json();
+            errorMsg = errorResult.message || errorMsg;
+        } catch (jsonError) {
+            // Could not parse JSON body, stick with status text
+        }
+        throw new Error(errorMsg);
+      }
+
       const result = await res.json();
 
-      if (!res.ok || !result.success) {
-        throw new Error(result.message || 'Server error');
+      if (!result.success) { // Assuming server sends { success: false, message: "..." }
+        throw new Error(result.message || 'Server processing failed');
       }
 
-      // Use result.images for thermal/real image
-      const thermal = result.images.find((img: any) => img.type === 'thermal');
-      const real = result.images.find((img: any) => img.type === 'real');
+      const thermalResult = result.images?.find((img: any) => img.type === 'thermal');
+      const realResult = result.images?.find((img: any) => img.type === 'real');
 
-      if (thermal) {
-        const thermalData = await processThermalBmpFromServer(thermal.url);
+      // Proceed if either a thermal or a real image URL is found
+      if (thermalResult?.url || realResult?.url) {
+        let thermalData: ThermalData | null = null;
+        if (thermalResult?.url) {
+          try {
+            console.log(`[UPLOAD] Processing thermal image from URL: ${thermalResult.url}`);
+            thermalData = await processThermalBmpFromServer(thermalResult.url);
+          } catch (thermalErr) {
+            console.error(`[UPLOAD] Failed to process thermal image from ${thermalResult.url}:`, thermalErr);
+            // thermalData remains null, which is acceptable
+          }
+        } else {
+          console.log('[UPLOAD] No thermal image URL found in server response.');
+        }
+
+        const realImageUrl = realResult?.url ?? null;
+        if (!realImageUrl) {
+            console.log('[UPLOAD] No real image URL found in server response.');
+        } else {
+            console.log(`[UPLOAD] Real image URL from server: ${realImageUrl}`);
+        }
+
+        const newImageId = generateId();
         const newImage: ThermalImage = {
-          id: generateId(),
+          id: newImageId,
           name: file.name,
-          thermalData,
-          realImage: real?.url ?? null,
+          thermalData: thermalData, // Can be null if thermal processing failed or no URL
+          realImage: realImageUrl,   // Can be null if no real image URL
         };
+
+        console.log('[UPLOAD] Adding new image to store:', newImage);
         addImage(newImage);
-        setActiveImage(newImage.id);
+        setActiveImage(newImage.id); // Set as active even if some parts are missing
+
+      } else {
+        // Neither thermal nor real image URL was found in the server response
+        console.warn('[UPLOAD] Server response did not contain thermal or real image URLs for file:', file.name, result);
+        // Optionally, inform the user here if desired, e.g., using a toast notification
+        // For now, just logging to console.
+        throw new Error('Server did not return valid image URLs.');
       }
-    } catch (err) {
-      console.error('Upload failed:', err);
+    } catch (err: any) { // Explicitly type err
+      console.error('[UPLOAD] File upload or processing failed for file:', file.name, err);
+      // Here you might want to show an error to the user, e.g., using a toast notification system
+      // For example: toast.error(`Upload failed for ${file.name}: ${err.message}`);
     }
   }
-}, [addImage, setActiveImage]);
+}, [addImage, setActiveImage, generateId, processThermalBmpFromServer]); // Added generateId and processThermalBmpFromServer to dependencies
  
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -178,22 +244,22 @@ const handleFileUpload = useCallback(async (files: FileList) => {
             });
         }
     }
-  }, [activeImage, zoom, panX, panY, isDragging, dragStart, activeTool, setPan, isDrawing, currentRegion]);
+  }, [activeImage, zoom, panX, panY, isDragging, dragStart, activeTool, setPan, isDrawing, currentRegion, setCurrentRegion]); // Added setCurrentRegion to dependencies
 
 
-  const handlePixelHoverFromRenderer = useCallback((imgX: number, imgY: number, temp: number | null) => {
-    setMousePos({ x: imgX, y: imgY }); // Store true image coordinates
-    setCurrentTemp(temp);
+  // const handlePixelHoverFromRenderer = useCallback((imgX: number, imgY: number, temp: number | null) => {
+  //   setMousePos({ x: imgX, y: imgY }); // Store true image coordinates
+  //   setCurrentTemp(temp);
 
-    // If actively drawing a region, update the currentRegion's last point
-    // This ensures smooth drawing even if mouse leaves the renderer canvas but is still over the general area
-    // Note: This might be redundant if handleContainerMouseMove covers it, but good for precision.
-    if (isDrawing && currentRegion && (activeTool === 'rectangle' || activeTool === 'polygon')) {
-      setCurrentRegion({
-        points: [...currentRegion.points.slice(0, -1), { x: imgX, y: imgY }]
-      });
-    }
-  }, [isDrawing, currentRegion, activeTool]);
+  //   // If actively drawing a region, update the currentRegion's last point
+  //   // This ensures smooth drawing even if mouse leaves the renderer canvas but is still over the general area
+  //   // Note: This might be redundant if handleContainerMouseMove covers it, but good for precision.
+  //   if (isDrawing && currentRegion && (activeTool === 'rectangle' || activeTool === 'polygon')) {
+  //     setCurrentRegion({
+  //       points: [...currentRegion.points.slice(0, -1), { x: imgX, y: imgY }]
+  //     });
+  //   }
+  // }, [isDrawing, currentRegion, activeTool]);
 
 
   const handleContainerMouseDown = useCallback((e: React.MouseEvent) => {
@@ -202,6 +268,7 @@ const handleFileUpload = useCallback(async (files: FileList) => {
     const rect = containerRef.current.getBoundingClientRect();
     const eventX = e.clientX - rect.left;
     const eventY = e.clientY - rect.top;
+    // These are coordinates relative to the container, need to be scaled and panned inversely
     const imgX = (eventX - panX) / zoom;
     const imgY = (eventY - panY) / zoom;
 
@@ -210,43 +277,113 @@ const handleFileUpload = useCallback(async (files: FileList) => {
       setDragStart({ x: e.clientX, y: e.clientY });
     } else if (activeTool === 'rectangle' && !isDrawing) {
       setIsDrawing(true);
+      // Initial point for rectangle, second point will be updated by mouse move
       setCurrentRegion({ points: [{ x: imgX, y: imgY }, { x: imgX, y: imgY }] });
     } else if (activeTool === 'polygon') {
       if (!isDrawing) {
         setIsDrawing(true);
+        // First point of polygon
         setCurrentRegion({ points: [{ x: imgX, y: imgY }] });
-      } else if (currentRegion) {
-        // For polygon, clicks add points. This is handled by handlePixelClickFromRenderer
-        // or here if click is outside the renderer but on the container
-         setCurrentRegion({
-           points: [...currentRegion.points, { x: imgX, y: imgY }]
-         });
       }
+      // Subsequent points for polygon are added by handleMainCanvasClick
+      // No need to add points here for polygon after the first one
     }
-  }, [activeTool, activeImage, zoom, panX, panY, isDrawing, currentRegion, setDragStart, setIsDragging, setCurrentRegion]);
+  }, [activeTool, activeImage, zoom, panX, panY, isDrawing, setDragStart, setIsDragging, setCurrentRegion]); // Removed currentRegion from deps as it's not used for decision making here directly for polygon point addition
 
-  const handlePixelClickFromRenderer = useCallback((imgX: number, imgY: number, temp: number | null) => {
-    if (!activeImage?.thermalData) return;
+  // const handlePixelClickFromRenderer = useCallback((imgX: number, imgY: number, temp: number | null) => {
+  //   if (!activeImage?.thermalData) return;
 
-    if (activeTool === 'point' && temp !== null) {
-      const marker = {
-        id: generateId(),
-        type: 'point' as const,
-        x: imgX, // Use direct image coordinates
-        y: imgY,
-        temperature: temp,
-        label: `Point ${markers.length + 1}`,
-        emissivity: 0.95 // Or from global/local settings
-      };
-      addMarker(marker);
+  //   if (activeTool === 'point' && temp !== null) {
+  //     const marker = {
+  //       id: generateId(),
+  //       type: 'point' as const,
+  //       x: imgX, // Use direct image coordinates
+  //       y: imgY,
+  //       temperature: temp,
+  //       label: `Point ${markers.length + 1}`,
+  //       emissivity: 0.95 // Or from global/local settings
+  //     };
+  //     addMarker(marker);
+  //   } else if (activeTool === 'polygon' && isDrawing && currentRegion) {
+  //     // Add point to polygon
+  //      setCurrentRegion({
+  //        points: [...currentRegion.points, { x: imgX, y: imgY }]
+  //      });
+  //   }
+  //   // Other click-based tool logic can be added here
+  // }, [activeTool, activeImage, markers, addMarker, isDrawing, currentRegion, setCurrentRegion]);
+
+  const handleMainCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!mainCanvasRef.current || !activeImage?.thermalData) {
+      setCurrentTemp(null); // Clear temp if no canvas or data
+      return;
+    }
+
+    const canvas = mainCanvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+
+    const scaleX = canvas.width / rect.width;    // relationship of actual canvas width to displayed width
+    const scaleY = canvas.height / rect.height;  // relationship of actual canvas height to displayed height
+
+    const canvasX = (e.clientX - rect.left) * scaleX;
+    const canvasY = (e.clientY - rect.top) * scaleY;
+
+    setMousePos({ x: canvasX, y: canvasY });
+
+    const temp = getTemperatureAtPixel(activeImage.thermalData, canvasX, canvasY);
+    setCurrentTemp(temp);
+
+    if (isDrawing && currentRegion && (activeTool === 'rectangle' || activeTool === 'polygon')) {
+      setCurrentRegion((prevRegion) => {
+        if (!prevRegion) return null;
+        const updatedPoints = [...prevRegion.points.slice(0, -1), { x: canvasX, y: canvasY }];
+        return { ...prevRegion, points: updatedPoints };
+      });
+    }
+  }, [activeImage, activeTool, isDrawing, currentRegion, setCurrentTemp, setMousePos, getTemperatureAtPixel, setCurrentRegion]); // Added setCurrentRegion
+
+  const handleMainCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!mainCanvasRef.current || !activeImage?.thermalData) return;
+
+    const canvas = mainCanvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    const canvasX = (e.clientX - rect.left) * scaleX;
+    const canvasY = (e.clientY - rect.top) * scaleY;
+
+    if (activeTool === 'point') {
+      const temp = getTemperatureAtPixel(activeImage.thermalData, canvasX, canvasY);
+      if (temp !== null) {
+        const marker = {
+          id: generateId(),
+          type: 'point' as const,
+          x: canvasX,
+          y: canvasY,
+          temperature: temp,
+          label: `Point ${markers.length + 1}`,
+          emissivity: 0.95,
+          imageId: activeImage.id,
+        };
+        addMarker(marker);
+      }
     } else if (activeTool === 'polygon' && isDrawing && currentRegion) {
-      // Add point to polygon
-       setCurrentRegion({
-         points: [...currentRegion.points, { x: imgX, y: imgY }]
-       });
+      // This adds a new point to the polygon for each click on the canvas
+      // The very first point is initiated by handleContainerMouseDown
+      setCurrentRegion((prevRegion) => {
+        if (!prevRegion) return null;
+        // Add the new click point, and also a new point for the mouse to continue drawing the "rubber band"
+        return { ...prevRegion, points: [...prevRegion.points, { x: canvasX, y: canvasY }] };
+      });
     }
-    // Other click-based tool logic can be added here
-  }, [activeTool, activeImage, markers, addMarker, isDrawing, currentRegion, setCurrentRegion]);
+  }, [activeImage, activeTool, markers, addMarker, isDrawing, currentRegion, setCurrentRegion, getTemperatureAtPixel, generateId]); // Added getTemperatureAtPixel, generateId
+
+  const handleMainCanvasMouseLeave = useCallback(() => {
+      setCurrentTemp(null);
+      // setMousePos({ x: 0, y: 0 }); // Optional: reset mousePos if needed
+  }, [setCurrentTemp]);
 
   const calculateRegionTemperatures = (thermalData: any, points: { x: number; y: number }[], type: string) => {
     const temps: number[] = [];
@@ -310,7 +447,8 @@ const handleFileUpload = useCallback(async (files: FileList) => {
         maxTemp: 0,
         avgTemp: 0,
         label: `Rectangle ${regions.length + 1}`,
-        emissivity: 0.95
+        emissivity: 0.95,
+        imageId: activeImage.id // Associate region with the active image
       };
       
       // Calculate temperature statistics for the region
@@ -332,29 +470,49 @@ const handleFileUpload = useCallback(async (files: FileList) => {
 
   const handleContainerDoubleClick = useCallback(() => {
     if (activeTool === 'polygon' && isDrawing && currentRegion && currentRegion.points.length >= 3) {
-      // Validate points before finalizing
-      if (currentRegion.points.length < 3) { // Ensure at least 3 points for a polygon
+      // Validate points before finalizing. For polygons, the last point is a temporary "rubber-band" point from mouse move.
+      // The actual click that adds a persistent point is handleMainCanvasClick.
+      // Double click finalizes, so we might have one extra point from the move before double click.
+      let finalPoints = currentRegion.points;
+      if (finalPoints.length > 1 && (activeTool === 'polygon')) { // For polygon, the last point is often the moving cursor pos
+         // Check if the last point is very close to the second to last; if so, it might be a byproduct of click + move
+         // However, a simpler approach is to rely on the user having clicked to place the points they want.
+         // The double click itself doesn't add a point, it finalizes the existing ones.
+         // If handleMainCanvasClick adds a point and then handleContainerMouseMove adds one before dblclick,
+         // we might have an extra point. The logic in handleMainCanvasClick for polygon adds a point.
+         // The logic in handleContainerMouseMove for polygon updates the *last* point.
+         // The logic in handleContainerMouseDown for polygon adds the *first* point, or if already drawing, it used to add subsequent points.
+         // Now, subsequent points for polygon are primarily added by handleMainCanvasClick.
+         // Let's assume points in currentRegion are the ones to save, potentially removing the last if it's a duplicate from drawing.
+         // A robust way is to remove the last point if it was just for "rubber-banding"
+         // The prompt suggests `currentRegion.points.slice(0, -1)`. This implies the last point is always temporary.
+         // This needs to be consistent with how points are added.
+         // If `handleMainCanvasClick` adds point `N` and `handleMainCanvasMouseMove` updates point `N+1` (temporary)
+         // then `slice(0,-1)` would remove the temporary point.
+         // If `handleContainerMouseDown` adds point 1.
+         // `handleMainCanvasClick` adds point 2. `currentRegion` is {P1, P2}. MouseMove updates P3. `currentRegion` is {P1, P2, P_move}.
+         // `handleMainCanvasClick` adds point 3. `currentRegion` is {P1, P2, P3}. MouseMove updates P4. `currentRegion` is {P1, P2, P3, P_move}.
+         // Double click: `finalPoints = currentRegion.points.slice(0, -1)` would be {P1, P2, P3}. This seems correct.
+         finalPoints = currentRegion.points.slice(0, -1);
+      }
+
+
+      if (finalPoints.length < 3) { // Ensure at least 3 points for a polygon
           setIsDrawing(false);
           setCurrentRegion(null);
           return;
-      }
-      // Remove the last point if it's the same as the one added by mouse move for current drawing
-      const finalPoints = currentRegion.points.slice(0, -1);
-      if (finalPoints.length < 3) {
-        setIsDrawing(false);
-        setCurrentRegion(null);
-        return;
       }
 
       const region = {
         id: generateId(),
         type: 'polygon' as const,
-        points: finalPoints, // These are already image coordinates
+        points: finalPoints,
         minTemp: 0,
         maxTemp: 0,
         avgTemp: 0,
         label: `Polygon ${regions.length + 1}`,
-        emissivity: 0.95
+        emissivity: 0.95,
+        imageId: activeImage.id // Associate region with the active image
       };
       
       // Calculate temperature statistics for the region
@@ -473,38 +631,28 @@ const handleFileUpload = useCallback(async (files: FileList) => {
                 position: 'relative', // For absolute positioning of overlays
               }}
             >
-              {activeImage.preRenderedThermalUrl ? (
-                <img
-                  src={activeImage.preRenderedThermalUrl}
-                  alt={t.thermalImage}
-                  style={{
-                    width: '100%', // Fill the container defined by thermalData.width/height
-                    height: '100%',
-                    objectFit: 'contain', // Ensure aspect ratio is maintained
-                    imageRendering: 'pixelated', // Good for thermal images
-                  }}
-                  // Mouse events for temperature reading might need to be adapted if we want them on the pre-rendered image.
-                  // For now, they will be disabled for pre-rendered images as per current logic (onPixelHover, onPixelClick are props of ThermalImageRenderer).
-                  // If needed, a wrapper div or direct event handlers on <img> could be added to get mouse coordinates.
-                />
-              ) : (
-                <ThermalImageRenderer
-                  thermalData={activeImage.thermalData}
-                  colorPalette={palette}
-                  temperatureScale={{
-                    min: customMinTemp ?? activeImage.thermalData.minTemp,
-                    max: customMaxTemp ?? activeImage.thermalData.maxTemp,
-                  }}
-                  onPixelHover={handlePixelHoverFromRenderer}
-                  onPixelClick={handlePixelClickFromRenderer}
-                />
-              )}
+              {/* The main canvas for thermal image rendering */}
+              <canvas
+                ref={mainCanvasRef}
+                // The style for width/height of the canvas itself will be set via canvas.width/height attributes
+                // It should be positioned absolutely or relatively within its parent div as needed
+                // Add mouse move/click handlers for temperature reading and marker placement later in step 2
+                style={{
+                  display: 'block', // Good practice for canvas
+                  width: '100%', // Display size (CSS pixels)
+                  height: '100%', // Display size (CSS pixels)
+                  // The actual rendering resolution is set by canvas.width and canvas.height in the effect
+                }}
+                onMouseMove={handleMainCanvasMouseMove} // New handler
+                onClick={handleMainCanvasClick}       // New handler
+                onMouseLeave={handleMainCanvasMouseLeave} // New handler
+              />
+              {/* Keep the overlayCanvas for markers/regions if it's separate */}
               <canvas
                 ref={overlayCanvasRef}
-                width={activeImage.thermalData.width}
-                height={activeImage.thermalData.height}
+                width={activeImage.thermalData.width} // This should be fine, it's for overlay
+                height={activeImage.thermalData.height} // This should be fine, it's for overlay
                 className="absolute top-0 left-0 pointer-events-none"
-                // Drawing on this canvas will be implemented later if needed for dynamic shapes
               />
               
               {/* Temperature Tooltip - uses mousePos (image coordinates) scaled and panned */}
