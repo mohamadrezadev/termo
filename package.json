@@ -8,8 +8,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "electron:dev": "next build && electron .",
-    "electron:build": "next build && electron-builder"
+    "export": "next export",
+    "build:static": "npm run build && npm run export",
+    "electron:dev": "npm run build:static && electron .",
+    "electron:build": "npm run build:static && electron-builder"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

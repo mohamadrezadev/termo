@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { useAppStore } from '@/lib/store';
 import { translations } from '@/lib/translations';
-import { COLOR_PALETTES } from '@/lib/thermal-utils';
+import { COLOR_PALETTES, interpolateColor, ColorPalette } from '@/lib/thermal-utils';
 import Window from './Window';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell } from 'recharts';
 
@@ -75,20 +75,6 @@ export default function Histogram() {
       }
     };
   }, [activeImage, customMinTemp, customMaxTemp, palette]);
-
-  // Simple color interpolation function
-  function interpolateColor(value: number, min: number, max: number, palette: any): string {
-    if (max === min) return palette.colors[0];
-    
-    const normalized = Math.max(0, Math.min(1, (value - min) / (max - min)));
-    const index = normalized * (palette.colors.length - 1);
-    const lower = Math.floor(index);
-    const upper = Math.ceil(index);
-    
-    if (lower === upper) return palette.colors[lower];
-    
-    return palette.colors[lower]; // Simplified for now
-  }
 
   return (
     <Window id="histogram" title={t.histogram} minWidth={300} minHeight={250}>

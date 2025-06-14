@@ -23,19 +23,34 @@ export default function ThermalImageRenderer({
   const localCanvasRef = useRef<HTMLCanvasElement>(null);
   const canvasRef = parentCanvasRef || localCanvasRef;
 
+  console.log(`[THERMAL_RENDERER] Component received props: thermalData (Width=${thermalData?.width}, Height=${thermalData?.height}, MinT=${thermalData?.minTemp}, MaxT=${thermalData?.maxTemp}), Palette=${colorPalette?.name}, TempScale (Min=${temperatureScale?.min}, Max=${temperatureScale?.max})`);
+
   const drawThermalImage = useCallback(() => {
+    console.log('[THERMAL_RENDERER] drawThermalImage called.');
     const canvas = canvasRef.current;
-    if (!canvas || !thermalData) {
-      if (canvas) {
-        // Clear canvas if no thermal data
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-        }
+    if (!canvas) {
+      console.error('[THERMAL_RENDERER] drawThermalImage: Canvas ref is not available.');
+      return;
+    }
+    if (!thermalData) {
+      console.log('[THERMAL_RENDERER] drawThermalImage: No thermalData, clearing canvas.');
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      } else {
+        console.error('[THERMAL_RENDERER] drawThermalImage: Failed to get 2D context for clearing.');
       }
       return;
     }
 
+    // Basic check for context before calling renderThermalCanvas, though renderThermalCanvas also checks.
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      console.error('[THERMAL_RENDERER] drawThermalImage: Failed to get 2D context before calling renderThermalCanvas.');
+      return;
+    }
+
+    console.log('[THERMAL_RENDERER] drawThermalImage: Calling renderThermalCanvas...');
     renderThermalCanvas(
       canvas,
       thermalData,
@@ -43,6 +58,7 @@ export default function ThermalImageRenderer({
       temperatureScale?.min,
       temperatureScale?.max
     );
+    console.log('[THERMAL_RENDERER] drawThermalImage: renderThermalCanvas call completed.');
   }, [thermalData, colorPalette, temperatureScale, canvasRef]);
 
   useEffect(() => {

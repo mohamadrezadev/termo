@@ -37,6 +37,7 @@ app.use('/images', express.static(EXTRACTED_DIR));
 app.post('/api/extract-bmps', (req, res) => {
     upload.single('bmtfile')(req, res, async (err) => {
         if (err instanceof multer.MulterError) {
+            console.error('[SERVER_API] Multer error during file upload:', err);
             if (err.code === 'LIMIT_FILE_SIZE') {
                 return res.status(413).json({ success: false, message: `File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB.` });
             }
@@ -44,40 +45,62 @@ app.post('/api/extract-bmps', (req, res) => {
             return res.status(400).json({ success: false, message: `Multer error: ${err.message}` });
         } else if (err) {
             // Handle other non-multer errors that might occur before file processing
-            console.error('Unknown error during upload:', err);
+            console.error('[SERVER_API] Unknown error during upload middleware:', err);
             return res.status(500).json({ success: false, message: `Unknown error during upload: ${err.message}` });
         }
 
         if (!req.file) {
+            console.log('[SERVER_API] Upload request received, but no file was provided.');
             return res.status(400).json({ success: false, message: 'No file uploaded.' });
         }
 
-        console.log(`File uploaded: ${req.file.originalname} (in memory)`);
+        console.log(`[SERVER_API] File received: ${req.file.originalname}, Size: ${req.file.size} bytes. Stored in memory.`);
 
         try {
             const extractionResult = await extractBmps(req.file.buffer, EXTRACTED_DIR);
+            console.log('[SERVER_API] Extraction result from extractBmps:', JSON.stringify(extractionResult, null, 2));
 
             if (extractionResult.success) {
-                // Construct URLs for the client to access the images
-                const imageUrls = extractionResult.images.map(img => {
-                    const filename = path.basename(img.path);
-                    return `${req.protocol}://${req.get('host')}/images/${filename}`;
+                const processedImages = extractionResult.images.map(img => {
+                    let filename;
+                    let sourcePathIdentifier; // For logging which path was used
+
+                    if (img.type === 'thermal' && img.originalPath) {
+                        filename = path.basename(img.originalPath);
+                        sourcePathIdentifier = 'originalPath';
+                    } else if (img.type === 'real' && img.path) {
+                        filename = path.basename(img.path);
+                        sourcePathIdentifier = 'path';
+                    } else {
+                        console.warn(`[SERVER_API] Image object of type '${img.type}' is missing its expected path property (originalPath or path). Image details: ${JSON.stringify(img)}`);
+                        filename = 'unknown_image.bmp'; // Fallback filename
+                        sourcePathIdentifier = 'unknown';
+                    }
+
+                    const imageUrl = `${req.protocol}://${req.get('host')}/images/${filename}`;
+                    console.log(`[SERVER_API] Mapping image: type='${img.type}', sourcePathId='${sourcePathIdentifier}', filename='${filename}', url='${imageUrl}'`);
+
+                    return {
+                        ...img, // Spreads all properties from the extractor (matrix, min/max temp, paths, etc.)
+                        url: imageUrl
+                    };
                 });
 
+                console.log('[SERVER_API] Final processed images for response:', JSON.stringify(processedImages.map(f => ({...f, temperatureMatrix: f.temperatureMatrix ? `Matrix[${f.height}x${f.width}]` : undefined })), null, 2));
+
                 res.status(200).json({
-                    ...extractionResult,
-                    images: extractionResult.images.map((img, index) => ({
-                        ...img,
-                        url: imageUrls[index] // Add URL to each image object
-                    }))
+                    success: extractionResult.success, // Ensure top-level success is passed
+                    message: extractionResult.message, // Pass overall message
+                    images: processedImages // Array of processed image objects
                 });
             } else {
                 // If extraction itself failed but was handled by extractBmps
+                console.error('[SERVER_API] Extraction process reported failure:', extractionResult.message);
                 res.status(500).json(extractionResult);
             }
         } catch (error) {
-            console.error('Error processing file:', error);
-            res.status(500).json({ success: false, message: `Server error: ${error.message}` });
+            console.error('[SERVER_API] Critical error in /api/extract-bmps route handler:', error);
+            res.status(500).json({ success: false, message: `Server error: ${error.message}`, errorDetails: error.toString() });
         }
     });
 });

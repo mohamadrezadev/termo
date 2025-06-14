@@ -1,11 +1,12 @@
 const fs = require('fs').promises;
 const path = require('path');
+const Jimp = require('jimp');
 
 async function extractBmps(inputBuffer, outputDir = '.') {
-    console.log(`Starting BMP extraction from buffer`);
+    console.log(`[SERVER_EXTRACTOR] Starting BMP extraction. Input buffer length: ${inputBuffer.length} bytes.`);
     try {
         const data = inputBuffer;
-        console.log(`Processing buffer of ${data.length} bytes`);
+        // console.log(`[SERVER_EXTRACTOR] Processing buffer of ${data.length} bytes`); // Redundant with above
 
         const bmSignature = Buffer.from('BM'); // 42 4D in hex
         const foundImages = [];
@@ -15,16 +16,16 @@ async function extractBmps(inputBuffer, outputDir = '.') {
             const bmIndex = data.indexOf(bmSignature, currentIndex);
 
             if (bmIndex === -1) {
-                console.log('No more BM signatures found.');
+                console.log('[SERVER_EXTRACTOR] No more BM signatures found.');
                 break;
             }
-            console.log(`Found BM signature at offset ${bmIndex}`);
+            console.log(`[SERVER_EXTRACTOR] Found BM signature at offset ${bmIndex}.`);
 
             // BMP header is at least 14 bytes for the main header part,
             // plus DIB header (min 40 bytes for BITMAPINFOHEADER).
             // We need at least 6 bytes from BM to read the size: BM (2) + Size (4)
             if (bmIndex + 6 > data.length) {
-                console.log(`BM signature at ${bmIndex} is too close to EOF to read size. Skipping.`);
+                console.log(`[SERVER_EXTRACTOR] BM signature at ${bmIndex} is too close to EOF (${data.length}) to read size. Skipping.`);
                 currentIndex = bmIndex + bmSignature.length; // Move past this BM
                 continue;
             }
@@ -32,19 +33,19 @@ async function extractBmps(inputBuffer, outputDir = '.') {
             // The size of the BMP file in bytes (4 bytes, little-endian)
             // is located at offset 2 from the 'BM' signature.
             const fileSize = data.readUInt32LE(bmIndex + 2);
-            console.log(`Potential BMP at ${bmIndex}, reported size: ${fileSize} bytes.`);
+            console.log(`[SERVER_EXTRACTOR] Potential BMP at offset ${bmIndex}, reported file size: ${fileSize} bytes.`);
 
             // Basic validation for file size
             // Smallest BMP is around 54 bytes (14 byte header + 40 byte DIB header for BITMAPINFOHEADER)
             // It should also not exceed the bounds of the read data from its starting offset
             if (fileSize < 54) {
-                console.log(`Reported BMP size ${fileSize} is too small. Skipping.`);
+                console.log(`[SERVER_EXTRACTOR] Reported BMP size ${fileSize} is too small (min 54 bytes). Skipping.`);
                 currentIndex = bmIndex + bmSignature.length;
                 continue;
             }
 
             if (bmIndex + fileSize > data.length) {
-                console.log(`Reported BMP size ${fileSize} from offset ${bmIndex} exceeds data length (${data.length}). Trying to find next BM.`);
+                console.log(`[SERVER_EXTRACTOR] Reported BMP size ${fileSize} from offset ${bmIndex} exceeds available data length (${data.length}). Skipping this BM header.`);
                 // This could be a false positive, so we search for the next BM signature
                 // instead of trusting this size.
                 currentIndex = bmIndex + bmSignature.length;
@@ -53,22 +54,81 @@ async function extractBmps(inputBuffer, outputDir = '.') {
 
             // Extract the BMP data
             const bmpData = data.slice(bmIndex, bmIndex + fileSize);
-            console.log(`Extracted potential BMP: ${bmpData.length} bytes from offset ${bmIndex}.`);
+            console.log(`[SERVER_EXTRACTOR] Extracted potential BMP data: length ${bmpData.length} bytes, from original buffer offset ${bmIndex}.`);
 
             // Further validation (optional but good): Check DIB header size or bits per pixel if known
             // For now, we assume if size is plausible, it's a BMP.
 
             const imageType = foundImages.length === 0 ? 'thermal' : 'real';
-            const outputFileName = foundImages.length === 0 ? 'extracted_thermal.bmp' : 'extracted_real.bmp';
-            const outputPath = path.join(outputDir, outputFileName);
 
-            try {
-                await fs.writeFile(outputPath, bmpData);
-                console.log(`Saved ${outputFileName} to ${outputPath}`);
-                foundImages.push({ path: outputPath, originalOffset: bmIndex, size: fileSize, type: imageType });
-            } catch (writeError) {
-                console.error(`Error writing BMP file ${outputFileName}:`, writeError);
-                // Continue to try and find the next one even if write fails for one
+            if (imageType === 'thermal') {
+                const rawThermalFileName = 'extracted_thermal_raw.bmp';
+                const rawThermalPath = path.join(outputDir, rawThermalFileName);
+                console.log(`[SERVER_EXTRACTOR] Attempting to save raw thermal image as ${rawThermalFileName} to ${rawThermalPath}.`);
+                try {
+                    await fs.writeFile(rawThermalPath, bmpData);
+                    console.log(`[SERVER_EXTRACTOR] Successfully saved ${rawThermalFileName} to ${rawThermalPath}.`);
+
+                    console.log('[SERVER_EXTRACTOR] Processing thermal image with Jimp...');
+                    const image = await Jimp.read(bmpData);
+                    const width = image.bitmap.width;
+                    const height = image.bitmap.height;
+                    const temperatureMatrix = [];
+                    let minTemp = Infinity;
+                    let maxTemp = -Infinity;
+
+                    for (let y = 0; y < height; y++) {
+                        const row = [];
+                        for (let x = 0; x < width; x++) {
+                            const pixelColor = image.getPixelColor(x, y);
+                            const rgba = Jimp.intToRGBA(pixelColor);
+                            const temp = rgba.r; // Using red channel
+                            row.push(temp);
+                            minTemp = Math.min(minTemp, temp);
+                            maxTemp = Math.max(maxTemp, temp);
+                        }
+                        temperatureMatrix.push(row);
+                    }
+
+                    if (minTemp === Infinity) { // Handle blank image
+                        minTemp = 0;
+                        maxTemp = 0;
+                    }
+
+                    console.log(`[SERVER_EXTRACTOR] Jimp processing complete. Width: ${width}, Height: ${height}, MinTemp: ${minTemp}, MaxTemp: ${maxTemp}`);
+                    foundImages.push({
+                        type: 'thermal',
+                        width,
+                        height,
+                        temperatureMatrix,
+                        minTemp,
+                        maxTemp,
+                        originalPath: rawThermalPath, // Path to the raw BMP file
+                        originalOffset: bmIndex,
+                        size: fileSize
+                    });
+
+                } catch (jimpError) {
+                    console.error('[SERVER_EXTRACTOR] Error processing thermal BMP with Jimp:', jimpError);
+                    // Optionally, still save the raw file if Jimp fails but writeFile succeeded
+                    // Or push a simpler object indicating failure but providing raw path
+                }
+            } else if (imageType === 'real') {
+                const realImageFileName = 'extracted_real.bmp';
+                const realImagePath = path.join(outputDir, realImageFileName);
+                console.log(`[SERVER_EXTRACTOR] Attempting to save real image as ${realImageFileName} to ${realImagePath}.`);
+                try {
+                    await fs.writeFile(realImagePath, bmpData);
+                    console.log(`[SERVER_EXTRACTOR] Successfully saved ${realImageFileName} to ${realImagePath}.`);
+                    foundImages.push({
+                        type: 'real',
+                        path: realImagePath,
+                        originalOffset: bmIndex,
+                        size: fileSize
+                    });
+                } catch (writeError) {
+                    console.error(`[SERVER_EXTRACTOR] Error writing real BMP file ${realImageFileName} to ${realImagePath}:`, writeError);
+                }
             }
 
             // Move current index past this found BMP to look for the next one
@@ -77,8 +137,11 @@ async function extractBmps(inputBuffer, outputDir = '.') {
         } // End of while loop
 
         if (foundImages.length < 2) {
-            console.warn(`Warning: Expected 2 images but found ${foundImages.length}.`);
+            console.warn(`[SERVER_EXTRACTOR] Warning: Expected 2 images but found ${foundImages.length}.`);
         }
+
+        console.log('[SERVER_EXTRACTOR] Final processed images details:', JSON.stringify(foundImages.map(f => ({...f, temperatureMatrix: f.temperatureMatrix ? `Matrix[${f.height}x${f.width}]` : undefined })), null, 2));
+
 
         return {
             success: true,
@@ -87,11 +150,12 @@ async function extractBmps(inputBuffer, outputDir = '.') {
         };
 
     } catch (error) {
-        console.error('Error during BMP extraction process:', error);
+        console.error('[SERVER_EXTRACTOR] Critical error during BMP extraction process:', error);
         return {
             success: false,
             images: [],
-            message: `Error extracting BMPs: ${error.message}`
+            message: `Error extracting BMPs: ${error.message}`,
+            error: error // Include the full error object if needed by caller
         };
     }
 }
