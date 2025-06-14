@@ -71,14 +71,31 @@ export default function ThermalViewer() {
   const handleFileUpload = useCallback(async (files: FileList) => {
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const formData = new FormData();
-      formData.append('bmtfile', file);
+      let response; // Declare response variable here to be used by both paths
 
       try {
-        const response = await fetch('/api/extract-bmps', {
-          method: 'POST',
-          body: formData,
-        });
+        if (typeof file.stream === 'function') {
+          // Use streaming upload
+          console.log(`Uploading ${file.name} using stream...`);
+          response = await fetch('/api/extract-bmps', {
+            method: 'POST',
+            body: file.stream(),
+            headers: {
+              'Content-Type': file.type || 'application/octet-stream',
+              'X-File-Name': encodeURIComponent(file.name) // Ensure filename is safely encoded
+            },
+            duplex: 'half' // Added for streaming request
+          });
+        } else {
+          // Fallback to FormData
+          console.log(`Uploading ${file.name} using FormData...`);
+          const formData = new FormData();
+          formData.append('bmtfile', file);
+          response = await fetch('/api/extract-bmps', {
+            method: 'POST',
+            body: formData,
+          });
+        }
 
         if (!response.ok) {
           // Try to get error message from server response body

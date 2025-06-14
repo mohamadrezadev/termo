@@ -9,15 +9,12 @@ const port = process.env.PORT || 3001; // Configurable port
 
 // Configure Multer for file storage
 // We'll save uploaded files to an 'uploads/' directory
-const UPLOADS_DIR = path.join(__dirname, 'uploads');
 const EXTRACTED_DIR = path.join(__dirname, 'extracted_images');
 
 // Ensure directories exist
 (async () => {
     try {
-        await fs.mkdir(UPLOADS_DIR, { recursive: true });
         await fs.mkdir(EXTRACTED_DIR, { recursive: true });
-        console.log(`Uploads directory ensured at: ${UPLOADS_DIR}`);
         console.log(`Extracted images directory ensured at: ${EXTRACTED_DIR}`);
     } catch (err) {
         console.error("Error creating directories:", err);
@@ -25,71 +22,64 @@ const EXTRACTED_DIR = path.join(__dirname, 'extracted_images');
     }
 })();
 
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, UPLOADS_DIR);
-    },
-    filename: function (req, file, cb) {
-        // Use a timestamp or unique ID to avoid filename conflicts
-        cb(null, Date.now() + '-' + file.originalname);
-    }
-});
+const storage = multer.memoryStorage();
+const MAX_FILE_SIZE = 250 * 1024 * 1024; // 250MB
 
-const upload = multer({ storage: storage });
+const upload = multer({
+    storage: storage,
+    limits: { fileSize: MAX_FILE_SIZE }
+});
 
 // Middleware to serve extracted images statically (optional, but useful for direct access)
 app.use('/images', express.static(EXTRACTED_DIR));
 
 // API endpoint for uploading and extracting BMPs
-app.post('/api/extract-bmps', upload.single('bmtfile'), async (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({ success: false, message: 'No file uploaded.' });
-    }
-
-    console.log(`File uploaded: ${req.file.path}`);
-
-    try {
-        const extractionResult = await extractBmps(req.file.path, EXTRACTED_DIR);
-
-        if (extractionResult.success) {
-            // Optionally, clean up the uploaded file after extraction
-            // await fs.unlink(req.file.path);
-            // console.log(`Cleaned up uploaded file: ${req.file.path}`);
-
-            // Construct URLs for the client to access the images
-            const imageUrls = extractionResult.images.map(img => {
-                const filename = path.basename(img.path);
-                return `${req.protocol}://${req.get('host')}/images/${filename}`;
-            });
-
-            res.status(200).json({
-                ...extractionResult,
-                images: extractionResult.images.map((img, index) => ({
-                    ...img,
-                    url: imageUrls[index] // Add URL to each image object
-                }))
-            });
-        } else {
-            // If extraction itself failed but was handled by extractBmps
-            res.status(500).json(extractionResult);
-        }
-    } catch (error) {
-        console.error('Error processing file:', error);
-        // Also clean up uploaded file in case of an unhandled error during processing
-        // await fs.unlink(req.file.path).catch(err => console.error("Error cleaning up file on failure:", err));
-        res.status(500).json({ success: false, message: `Server error: ${error.message}` });
-    } finally {
-        // Clean up the uploaded file in all cases (success or handled error)
-        // We might want to keep it for debugging in some cases, so this is optional
-        try {
-            if (req.file && req.file.path) {
-                await fs.unlink(req.file.path);
-                console.log(`Cleaned up uploaded file: ${req.file.path}`);
+app.post('/api/extract-bmps', (req, res) => {
+    upload.single('bmtfile')(req, res, async (err) => {
+        if (err instanceof multer.MulterError) {
+            if (err.code === 'LIMIT_FILE_SIZE') {
+                return res.status(413).json({ success: false, message: `File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB.` });
             }
-        } catch (cleanupError) {
-            console.error('Error during post-processing cleanup of uploaded file:', cleanupError);
+            // Handle other multer errors
+            return res.status(400).json({ success: false, message: `Multer error: ${err.message}` });
+        } else if (err) {
+            // Handle other non-multer errors that might occur before file processing
+            console.error('Unknown error during upload:', err);
+            return res.status(500).json({ success: false, message: `Unknown error during upload: ${err.message}` });
         }
-    }
+
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: 'No file uploaded.' });
+        }
+
+        console.log(`File uploaded: ${req.file.originalname} (in memory)`);
+
+        try {
+            const extractionResult = await extractBmps(req.file.buffer, EXTRACTED_DIR);
+
+            if (extractionResult.success) {
+                // Construct URLs for the client to access the images
+                const imageUrls = extractionResult.images.map(img => {
+                    const filename = path.basename(img.path);
+                    return `${req.protocol}://${req.get('host')}/images/${filename}`;
+                });
+
+                res.status(200).json({
+                    ...extractionResult,
+                    images: extractionResult.images.map((img, index) => ({
+                        ...img,
+                        url: imageUrls[index] // Add URL to each image object
+                    }))
+                });
+            } else {
+                // If extraction itself failed but was handled by extractBmps
+                res.status(500).json(extractionResult);
+            }
+        } catch (error) {
+            console.error('Error processing file:', error);
+            res.status(500).json({ success: false, message: `Server error: ${error.message}` });
+        }
+    });
 });
 
 app.get('/', (req, res) => {
