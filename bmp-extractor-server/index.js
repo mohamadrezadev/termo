@@ -3,6 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises; // For directory creation if needed
 const { extractBmps } = require('./extractor');
+const bmp = require('bmp-js');
 
 const app = express();
 const port = process.env.PORT || 3001; // Configurable port
@@ -58,18 +59,55 @@ app.post('/api/extract-bmps', (req, res) => {
             const extractionResult = await extractBmps(req.file.buffer, EXTRACTED_DIR);
 
             if (extractionResult.success) {
-                // Construct URLs for the client to access the images
                 const imageUrls = extractionResult.images.map(img => {
                     const filename = path.basename(img.path);
                     return `${req.protocol}://${req.get('host')}/images/${filename}`;
                 });
 
+                // Build thermal data from the first extracted image
+                let thermalData = null;
+                const thermalInfo = extractionResult.images.find(img => img.type === 'thermal');
+                if (thermalInfo) {
+                    try {
+                        const buffer = await fs.readFile(thermalInfo.path);
+                        const decoded = bmp.decode(buffer);
+                        const { width, height, data } = decoded;
+
+                        const temperatureMatrix = [];
+                        let minTemp = Infinity;
+                        let maxTemp = -Infinity;
+                        for (let y = 0; y < height; y++) {
+                            const row = [];
+                            for (let x = 0; x < width; x++) {
+                                const idx = (y * width + x) * 4;
+                                const temp = data[idx]; // red channel
+                                row.push(temp);
+                                if (temp < minTemp) minTemp = temp;
+                                if (temp > maxTemp) maxTemp = temp;
+                            }
+                            temperatureMatrix.push(row);
+                        }
+
+                        thermalData = {
+                            width,
+                            height,
+                            temperatureMatrix,
+                            minTemp,
+                            maxTemp,
+                        };
+                    } catch (parseErr) {
+                        console.error('Failed to parse thermal BMP', parseErr);
+                    }
+                }
+
                 res.status(200).json({
-                    ...extractionResult,
+                    success: true,
+                    message: extractionResult.message,
                     images: extractionResult.images.map((img, index) => ({
                         ...img,
-                        url: imageUrls[index] // Add URL to each image object
-                    }))
+                        url: imageUrls[index]
+                    })),
+                    thermalData,
                 });
             } else {
                 // If extraction itself failed but was handled by extractBmps
