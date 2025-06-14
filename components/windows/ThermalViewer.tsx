@@ -78,7 +78,7 @@ export default function ThermalViewer() {
         console.log(`Uploading ${file.name} using FormData...`);
         const formData = new FormData();
         formData.append('bmtfile', file); // 'bmtfile' is the field name server expects
-        response = await fetch('/api/python/extract-bmps', { // Changed URL
+        response = await fetch('/api/extract-bmps', {
           method: 'POST',
           body: formData,
           // No 'Content-Type' header needed here; browser sets it for FormData
@@ -138,6 +138,7 @@ export default function ThermalViewer() {
       }
     }
   }, [addImage, setActiveImage]);
+
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
