@@ -83,7 +83,11 @@ export const COLOR_PALETTES: Record<string, ColorPalette> = {
 };
 
 export function interpolateColor(value: number, min: number, max: number, palette: ColorPalette): string {
-  if (max === min) return palette.colors[0];
+  if (max === min) {
+    // If min and max are equal, return the middle color of the palette
+    // This prevents uniform temperature images from always being the first color (e.g., black)
+    return palette.colors[Math.floor(palette.colors.length / 2)];
+  }
   
   const normalized = Math.max(0, Math.min(1, (value - min) / (max - min)));
   const index = normalized * (palette.colors.length - 1);
@@ -96,7 +100,10 @@ export function interpolateColor(value: number, min: number, max: number, palett
   const colorLower = hexToRgb(palette.colors[lower]);
   const colorUpper = hexToRgb(palette.colors[upper]);
   
-  if (!colorLower || !colorUpper) return palette.colors[0];
+  if (!colorLower || !colorUpper) {
+    // Fallback if hexToRgb fails for some reason, though unlikely with valid hex strings
+    return palette.colors[Math.floor(palette.colors.length / 2)];
+  }
   
   const r = Math.round(colorLower.r + factor * (colorUpper.r - colorLower.r));
   const g = Math.round(colorLower.g + factor * (colorUpper.g - colorLower.g));
