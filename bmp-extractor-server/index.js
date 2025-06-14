@@ -37,6 +37,7 @@ app.use('/images', express.static(EXTRACTED_DIR));
 app.post('/api/extract-bmps', (req, res) => {
     upload.single('bmtfile')(req, res, async (err) => {
         if (err instanceof multer.MulterError) {
+            console.error('[SERVER_API] Multer error during file upload:', err);
             if (err.code === 'LIMIT_FILE_SIZE') {
                 return res.status(413).json({ success: false, message: `File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB.` });
             }
@@ -44,18 +45,20 @@ app.post('/api/extract-bmps', (req, res) => {
             return res.status(400).json({ success: false, message: `Multer error: ${err.message}` });
         } else if (err) {
             // Handle other non-multer errors that might occur before file processing
-            console.error('Unknown error during upload:', err);
+            console.error('[SERVER_API] Unknown error during upload middleware:', err);
             return res.status(500).json({ success: false, message: `Unknown error during upload: ${err.message}` });
         }
 
         if (!req.file) {
+            console.log('[SERVER_API] Upload request received, but no file was provided.');
             return res.status(400).json({ success: false, message: 'No file uploaded.' });
         }
 
-        console.log(`File uploaded: ${req.file.originalname} (in memory)`);
+        console.log(`[SERVER_API] File received: ${req.file.originalname}, Size: ${req.file.size} bytes. Stored in memory.`);
 
         try {
             const extractionResult = await extractBmps(req.file.buffer, EXTRACTED_DIR);
+            console.log('[SERVER_API] Extraction result from extractBmps:', JSON.stringify(extractionResult, null, 2));
 
             if (extractionResult.success) {
                 // Construct URLs for the client to access the images
@@ -63,6 +66,7 @@ app.post('/api/extract-bmps', (req, res) => {
                     const filename = path.basename(img.path);
                     return `${req.protocol}://${req.get('host')}/images/${filename}`;
                 });
+                console.log('[SERVER_API] Constructed image URLs:', JSON.stringify(imageUrls, null, 2));
 
                 res.status(200).json({
                     ...extractionResult,
@@ -73,11 +77,12 @@ app.post('/api/extract-bmps', (req, res) => {
                 });
             } else {
                 // If extraction itself failed but was handled by extractBmps
+                console.error('[SERVER_API] Extraction process reported failure:', extractionResult.message);
                 res.status(500).json(extractionResult);
             }
         } catch (error) {
-            console.error('Error processing file:', error);
-            res.status(500).json({ success: false, message: `Server error: ${error.message}` });
+            console.error('[SERVER_API] Critical error in /api/extract-bmps route handler:', error);
+            res.status(500).json({ success: false, message: `Server error: ${error.message}`, errorDetails: error.toString() });
         }
     });
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { useAppStore } from '@/lib/store';
 import { translations } from '@/lib/translations';
 import Window from './Window';
@@ -36,6 +36,14 @@ export default function RealImageViewer() {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   const activeImage = images.find(img => img.id === activeImageId);
+
+  useEffect(() => {
+    if (activeImage) {
+      console.log(`[REAL_IMG_VIEWER] Attempting to render real image. Active image ID: ${activeImage.id}, RealImage URL: ${activeImage.realImage}`);
+    } else {
+      console.log(`[REAL_IMG_VIEWER] No active image, so no real image to render.`);
+    }
+  }, [activeImage?.realImage, activeImage?.id]); // Added activeImage.id for more context if URL is null
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (isDragging) {
@@ -161,6 +169,9 @@ export default function RealImageViewer() {
                     transform: `scale(${zoom}) translate(${panX / zoom}px, ${panY / zoom}px)`,
                     transformOrigin: '0 0',
                     opacity: fusionMode === 'overlay' ? overlayOpacity / 100 : 1
+                  }}
+                  onError={(e) => {
+                    console.error(`[REAL_IMG_VIEWER] Error loading real image. URL: ${e.currentTarget.src}`, e);
                   }}
                   draggable={false}
                 />
