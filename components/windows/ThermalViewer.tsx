@@ -82,123 +82,46 @@ export default function ThermalViewer() {
   }, [activeImage]);
 
   // renderThermal and its useEffect will be removed, handled by ThermalImageRenderer
+const handleFileUpload = useCallback(async (files: FileList) => {
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
 
-  const handleFileUpload = useCallback(async (files: FileList) => {
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      let response;
+    try {
+      const formData = new FormData();
+      formData.append('file', file); // ✅ corrected
 
-      try {
-        console.log(`[THERMAL_VIEWER_UPLOAD] Uploading ${file.name} using FormData...`);
-        const formData = new FormData();
-        formData.append('bmtfile', file); // 'bmtfile' is the field name server expects
-        response = await fetch('/api/extract-bmps', {
-          method: 'POST',
-          body: formData,
-        });
+      const res = await fetch('http://localhost:8000/api/extract-bmps-py', {
+        method: 'POST',
+        body: formData,
+      });
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => null); // Try to get error details
-          console.error(`[THERMAL_VIEWER_UPLOAD] Server error: ${response.status} ${response.statusText}. Details: ${JSON.stringify(errorData)}`);
-          throw new Error(`Server error: ${response.status} ${response.statusText}. ${errorData?.message ? `Details: ${errorData.message}` : ''}`);
-        }
+      const result = await res.json();
 
-        const result = await response.json();
-        console.log('[THERMAL_VIEWER_UPLOAD] Server response JSON:', JSON.stringify(result, null, 2));
-
-
-        if (!result.success || !result.images) {
-          console.error('[THERMAL_VIEWER_UPLOAD] Server indicated failure or missing images data. Result:', result);
-          throw new Error(`Server indicated failure or missing images data. Message: ${result.message}`);
-        }
-
-        const thermalImageInfo = result.images.find((img: any) => img.type === 'thermal');
-        const realImageInfo = result.images.find((img: any) => img.type === 'real');
-        console.log('[THERMAL_VIEWER_UPLOAD] Thermal image info from server:', JSON.stringify(thermalImageInfo, null, 2));
-        console.log('[THERMAL_VIEWER_UPLOAD] Real image info from server:', JSON.stringify(realImageInfo, null, 2));
-
-        let finalThermalData: ThermalData | null = null;
-        let preRenderedThermalUrlForNewImage: string | null = null; // Renamed to avoid conflict if activeImage.preRenderedThermalUrl is accessed in same scope
-
-        if (thermalImageInfo) {
-            preRenderedThermalUrlForNewImage = thermalImageInfo.url || null; // URL to the raw BMP
-            console.log(`[THERMAL_VIEWER_UPLOAD] Thermal image info found. Raw BMP URL: ${preRenderedThermalUrlForNewImage}`);
-
-            // Check for server-provided processed data
-            if (
-                thermalImageInfo.temperatureMatrix &&
-                thermalImageInfo.width !== undefined &&
-                thermalImageInfo.height !== undefined &&
-                thermalImageInfo.minTemp !== undefined &&
-                thermalImageInfo.maxTemp !== undefined
-            ) {
-                console.log('[THERMAL_VIEWER_UPLOAD] Using server-provided thermal data (matrix, dimensions, min/max).');
-                finalThermalData = {
-                    width: thermalImageInfo.width,
-                    height: thermalImageInfo.height,
-                    temperatureMatrix: thermalImageInfo.temperatureMatrix,
-                    minTemp: thermalImageInfo.minTemp,
-                    maxTemp: thermalImageInfo.maxTemp,
-                    metadata: { // Basic metadata
-                        emissivity: thermalImageInfo.metadata?.emissivity || 0.95,
-                        ambientTemp: thermalImageInfo.metadata?.ambientTemp || 20,
-                        reflectedTemp: thermalImageInfo.metadata?.reflectedTemp || 20,
-                        humidity: thermalImageInfo.metadata?.humidity || 0.50,
-                        distance: thermalImageInfo.metadata?.distance || 1.0,
-                        cameraModel: thermalImageInfo.metadata?.cameraModel || 'Server Extracted Thermal',
-                        timestamp: thermalImageInfo.metadata?.timestamp ? new Date(thermalImageInfo.metadata.timestamp) : new Date()
-                    }
-                };
-            } else {
-                // Server did not provide the matrix or essential data for the thermal image.
-                // Log an error. For this subtask, we will not fall back to client-side processing.
-                // thermalData will remain null.
-                console.error('[THERMAL_VIEWER_UPLOAD] Thermal image info received from server, but temperatureMatrix or other essential data is missing. File:', file.name, thermalImageInfo);
-                // If preRenderedThermalUrlForNewImage is set, user might still see the raw BMP if UI supports it, but no thermal analysis.
-            }
-        } else if (realImageInfo) {
-             console.log('[THERMAL_VIEWER_UPLOAD] No thermal image info from server, but real image info found. File:', file.name);
-             // finalThermalData remains null. preRenderedThermalUrlForNewImage also remains null.
-             // newThermalImage will be created with thermalData: null.
-        } else {
-            console.error('[THERMAL_VIEWER_UPLOAD] Neither thermal nor real image info found in server response for file:', file.name, result);
-            throw new Error('No thermal or real image data found in server response.');
-        }
-
-        // Construct and add the image if we have at least some data (thermal or real, or just a name)
-        // If thermalImageInfo was present but matrix was missing, finalThermalData will be null.
-        // If only realImageInfo was present, finalThermalData will be null.
-        // The preRenderedThermalUrlForNewImage will be the URL to the raw thermal BMP if thermalImageInfo was present.
-
-        const newImageId = generateId();
-        const newThermalImage: ThermalImage = {
-            id: newImageId,
-            name: file.name, // Original file name
-            thermalData: finalThermalData,
-            realImage: realImageInfo ? realImageInfo.url : null,
-            preRenderedThermalUrl: preRenderedThermalUrlForNewImage, // URL to raw thermal BMP from server
-        };
-
-        console.log('[THERMAL_VIEWER_UPLOAD] New ThermalImage object to be added:', JSON.stringify({...newThermalImage, thermalData: newThermalImage.thermalData ? `Matrix[${newThermalImage.thermalData.height}x${newThermalImage.thermalData.width}]` : null }, null, 2));
-
-        addImage(newThermalImage);
-        setActiveImage(newImageId); // Set the new image as active
-        console.log(`[THERMAL_VIEWER_UPLOAD] Successfully added image: ${newImageId} and set as active. Name: ${file.name}`);
-
-      } catch (error) {
-        console.error(`[THERMAL_VIEWER_UPLOAD] Error during file upload/processing for ${file.name}:`, error);
-        if (error instanceof TypeError && error.message === 'Failed to fetch') {
-            console.error(`[THERMAL_VIEWER_UPLOAD] Network error or server unreachable while trying to upload ${file.name}. Please check your connection and if the server is running.`);
-        }
-        // Potentially add a more user-friendly error message to the UI here
+      if (!res.ok || !result.success) {
+        throw new Error(result.message || 'Server error');
       }
+
+      // Use result.images for thermal/real image
+      const thermal = result.images.find((img: any) => img.type === 'thermal');
+      const real = result.images.find((img: any) => img.type === 'real');
+
+      if (thermal) {
+        const thermalData = await processThermalBmpFromServer(thermal.url);
+        const newImage: ThermalImage = {
+          id: generateId(),
+          name: file.name,
+          thermalData,
+          realImage: real?.url ?? null,
+        };
+        addImage(newImage);
+        setActiveImage(newImage.id);
+      }
+    } catch (err) {
+      console.error('Upload failed:', err);
     }
-  }, [addImage, setActiveImage]);
-
-
-  // Ensure useEffect is imported only once if `useReactEffect` was a placeholder
-  // (The tool output for the first diff block shows `useEffect` correctly, so this comment is more for human review)
-
+  }
+}, [addImage, setActiveImage]);
+ 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     const files = e.dataTransfer.files;
