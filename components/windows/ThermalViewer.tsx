@@ -84,6 +84,7 @@ export default function ThermalViewer() {
               'Content-Type': file.type || 'application/octet-stream',
               'X-File-Name': encodeURIComponent(file.name) // Ensure filename is safely encoded
             },
+            duplex: 'half' // Added for streaming request
           });
         } else {
           // Fallback to FormData
