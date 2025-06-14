@@ -1,5 +1,6 @@
 const fs = require('fs').promises;
 const path = require('path');
+const Jimp = require('jimp');
 
 async function extractBmps(inputBuffer, outputDir = '.') {
     console.log(`[SERVER_EXTRACTOR] Starting BMP extraction. Input buffer length: ${inputBuffer.length} bytes.`);
@@ -59,17 +60,75 @@ async function extractBmps(inputBuffer, outputDir = '.') {
             // For now, we assume if size is plausible, it's a BMP.
 
             const imageType = foundImages.length === 0 ? 'thermal' : 'real';
-            const outputFileName = foundImages.length === 0 ? 'extracted_thermal.bmp' : 'extracted_real.bmp';
-            const outputPath = path.join(outputDir, outputFileName);
-            console.log(`[SERVER_EXTRACTOR] Attempting to save ${imageType} image as ${outputFileName} to ${outputPath}.`);
 
-            try {
-                await fs.writeFile(outputPath, bmpData);
-                console.log(`[SERVER_EXTRACTOR] Successfully saved ${outputFileName} to ${outputPath}.`);
-                foundImages.push({ path: outputPath, originalOffset: bmIndex, size: fileSize, type: imageType });
-            } catch (writeError) {
-                console.error(`[SERVER_EXTRACTOR] Error writing BMP file ${outputFileName} to ${outputPath}:`, writeError);
-                // Continue to try and find the next one even if write fails for one
+            if (imageType === 'thermal') {
+                const rawThermalFileName = 'extracted_thermal_raw.bmp';
+                const rawThermalPath = path.join(outputDir, rawThermalFileName);
+                console.log(`[SERVER_EXTRACTOR] Attempting to save raw thermal image as ${rawThermalFileName} to ${rawThermalPath}.`);
+                try {
+                    await fs.writeFile(rawThermalPath, bmpData);
+                    console.log(`[SERVER_EXTRACTOR] Successfully saved ${rawThermalFileName} to ${rawThermalPath}.`);
+
+                    console.log('[SERVER_EXTRACTOR] Processing thermal image with Jimp...');
+                    const image = await Jimp.read(bmpData);
+                    const width = image.bitmap.width;
+                    const height = image.bitmap.height;
+                    const temperatureMatrix = [];
+                    let minTemp = Infinity;
+                    let maxTemp = -Infinity;
+
+                    for (let y = 0; y < height; y++) {
+                        const row = [];
+                        for (let x = 0; x < width; x++) {
+                            const pixelColor = image.getPixelColor(x, y);
+                            const rgba = Jimp.intToRGBA(pixelColor);
+                            const temp = rgba.r; // Using red channel
+                            row.push(temp);
+                            minTemp = Math.min(minTemp, temp);
+                            maxTemp = Math.max(maxTemp, temp);
+                        }
+                        temperatureMatrix.push(row);
+                    }
+
+                    if (minTemp === Infinity) { // Handle blank image
+                        minTemp = 0;
+                        maxTemp = 0;
+                    }
+
+                    console.log(`[SERVER_EXTRACTOR] Jimp processing complete. Width: ${width}, Height: ${height}, MinTemp: ${minTemp}, MaxTemp: ${maxTemp}`);
+                    foundImages.push({
+                        type: 'thermal',
+                        width,
+                        height,
+                        temperatureMatrix,
+                        minTemp,
+                        maxTemp,
+                        originalPath: rawThermalPath, // Path to the raw BMP file
+                        originalOffset: bmIndex,
+                        size: fileSize
+                    });
+
+                } catch (jimpError) {
+                    console.error('[SERVER_EXTRACTOR] Error processing thermal BMP with Jimp:', jimpError);
+                    // Optionally, still save the raw file if Jimp fails but writeFile succeeded
+                    // Or push a simpler object indicating failure but providing raw path
+                }
+            } else if (imageType === 'real') {
+                const realImageFileName = 'extracted_real.bmp';
+                const realImagePath = path.join(outputDir, realImageFileName);
+                console.log(`[SERVER_EXTRACTOR] Attempting to save real image as ${realImageFileName} to ${realImagePath}.`);
+                try {
+                    await fs.writeFile(realImagePath, bmpData);
+                    console.log(`[SERVER_EXTRACTOR] Successfully saved ${realImageFileName} to ${realImagePath}.`);
+                    foundImages.push({
+                        type: 'real',
+                        path: realImagePath,
+                        originalOffset: bmIndex,
+                        size: fileSize
+                    });
+                } catch (writeError) {
+                    console.error(`[SERVER_EXTRACTOR] Error writing real BMP file ${realImageFileName} to ${realImagePath}:`, writeError);
+                }
             }
 
             // Move current index past this found BMP to look for the next one
@@ -81,7 +140,8 @@ async function extractBmps(inputBuffer, outputDir = '.') {
             console.warn(`[SERVER_EXTRACTOR] Warning: Expected 2 images but found ${foundImages.length}.`);
         }
 
-        console.log('[SERVER_EXTRACTOR] Found images details:', JSON.stringify(foundImages, null, 2));
+        console.log('[SERVER_EXTRACTOR] Final processed images details:', JSON.stringify(foundImages.map(f => ({...f, temperatureMatrix: f.temperatureMatrix ? `Matrix[${f.height}x${f.width}]` : undefined })), null, 2));
+
 
         return {
             success: true,

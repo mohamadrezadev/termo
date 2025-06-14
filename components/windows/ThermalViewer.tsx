@@ -117,33 +117,73 @@ export default function ThermalViewer() {
         console.log('[THERMAL_VIEWER_UPLOAD] Thermal image info from server:', JSON.stringify(thermalImageInfo, null, 2));
         console.log('[THERMAL_VIEWER_UPLOAD] Real image info from server:', JSON.stringify(realImageInfo, null, 2));
 
+        let finalThermalData: ThermalData | null = null;
+        let preRenderedThermalUrlForNewImage: string | null = null; // Renamed to avoid conflict if activeImage.preRenderedThermalUrl is accessed in same scope
 
-        if (thermalImageInfo && thermalImageInfo.url) {
-          try {
-            console.log(`[THERMAL_VIEWER_UPLOAD] Processing thermal BMP from server URL: ${thermalImageInfo.url}`);
-            const thermalData = await processThermalBmpFromServer(thermalImageInfo.url);
+        if (thermalImageInfo) {
+            preRenderedThermalUrlForNewImage = thermalImageInfo.url || null; // URL to the raw BMP
+            console.log(`[THERMAL_VIEWER_UPLOAD] Thermal image info found. Raw BMP URL: ${preRenderedThermalUrlForNewImage}`);
 
-            const newImageId = generateId();
-            const newThermalImage: ThermalImage = {
-              id: newImageId,
-              name: file.name, // Original file name
-              thermalData: thermalData,
-              realImage: realImageInfo ? realImageInfo.url : null,
-            };
-            console.log('[THERMAL_VIEWER_UPLOAD] New ThermalImage object to be added:', JSON.stringify(newThermalImage, null, 2));
-
-            addImage(newThermalImage);
-            setActiveImage(newThermalImage.id);
-            console.log(`[THERMAL_VIEWER_UPLOAD] Successfully added and set active image: ${newImageId}`);
-
-          } catch (processingError) {
-            console.error('[THERMAL_VIEWER_UPLOAD] Failed to process thermal image from server URL:', thermalImageInfo.url, processingError);
-            throw new Error(`Failed to process thermal image from server. ${processingError instanceof Error ? processingError.message : String(processingError)}`);
-          }
+            // Check for server-provided processed data
+            if (
+                thermalImageInfo.temperatureMatrix &&
+                thermalImageInfo.width !== undefined &&
+                thermalImageInfo.height !== undefined &&
+                thermalImageInfo.minTemp !== undefined &&
+                thermalImageInfo.maxTemp !== undefined
+            ) {
+                console.log('[THERMAL_VIEWER_UPLOAD] Using server-provided thermal data (matrix, dimensions, min/max).');
+                finalThermalData = {
+                    width: thermalImageInfo.width,
+                    height: thermalImageInfo.height,
+                    temperatureMatrix: thermalImageInfo.temperatureMatrix,
+                    minTemp: thermalImageInfo.minTemp,
+                    maxTemp: thermalImageInfo.maxTemp,
+                    metadata: { // Basic metadata
+                        emissivity: thermalImageInfo.metadata?.emissivity || 0.95,
+                        ambientTemp: thermalImageInfo.metadata?.ambientTemp || 20,
+                        reflectedTemp: thermalImageInfo.metadata?.reflectedTemp || 20,
+                        humidity: thermalImageInfo.metadata?.humidity || 0.50,
+                        distance: thermalImageInfo.metadata?.distance || 1.0,
+                        cameraModel: thermalImageInfo.metadata?.cameraModel || 'Server Extracted Thermal',
+                        timestamp: thermalImageInfo.metadata?.timestamp ? new Date(thermalImageInfo.metadata.timestamp) : new Date()
+                    }
+                };
+            } else {
+                // Server did not provide the matrix or essential data for the thermal image.
+                // Log an error. For this subtask, we will not fall back to client-side processing.
+                // thermalData will remain null.
+                console.error('[THERMAL_VIEWER_UPLOAD] Thermal image info received from server, but temperatureMatrix or other essential data is missing. File:', file.name, thermalImageInfo);
+                // If preRenderedThermalUrlForNewImage is set, user might still see the raw BMP if UI supports it, but no thermal analysis.
+            }
+        } else if (realImageInfo) {
+             console.log('[THERMAL_VIEWER_UPLOAD] No thermal image info from server, but real image info found. File:', file.name);
+             // finalThermalData remains null. preRenderedThermalUrlForNewImage also remains null.
+             // newThermalImage will be created with thermalData: null.
         } else {
-          console.error('[THERMAL_VIEWER_UPLOAD] No thermal image URL found in server response for file:', file.name, result);
-          throw new Error('No thermal image URL found in server response.');
+            console.error('[THERMAL_VIEWER_UPLOAD] Neither thermal nor real image info found in server response for file:', file.name, result);
+            throw new Error('No thermal or real image data found in server response.');
         }
+
+        // Construct and add the image if we have at least some data (thermal or real, or just a name)
+        // If thermalImageInfo was present but matrix was missing, finalThermalData will be null.
+        // If only realImageInfo was present, finalThermalData will be null.
+        // The preRenderedThermalUrlForNewImage will be the URL to the raw thermal BMP if thermalImageInfo was present.
+
+        const newImageId = generateId();
+        const newThermalImage: ThermalImage = {
+            id: newImageId,
+            name: file.name, // Original file name
+            thermalData: finalThermalData,
+            realImage: realImageInfo ? realImageInfo.url : null,
+            preRenderedThermalUrl: preRenderedThermalUrlForNewImage, // URL to raw thermal BMP from server
+        };
+
+        console.log('[THERMAL_VIEWER_UPLOAD] New ThermalImage object to be added:', JSON.stringify({...newThermalImage, thermalData: newThermalImage.thermalData ? `Matrix[${newThermalImage.thermalData.height}x${newThermalImage.thermalData.width}]` : null }, null, 2));
+
+        addImage(newThermalImage);
+        setActiveImage(newImageId); // Set the new image as active
+        console.log(`[THERMAL_VIEWER_UPLOAD] Successfully added image: ${newImageId} and set as active. Name: ${file.name}`);
 
       } catch (error) {
         console.error(`[THERMAL_VIEWER_UPLOAD] Error during file upload/processing for ${file.name}:`, error);
