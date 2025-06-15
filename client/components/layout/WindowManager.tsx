@@ -8,7 +8,8 @@ interface WindowManagerProps {
 }
 
 export default function WindowManager({ children }: WindowManagerProps) {
-  const { calculateGridLayout } = useAppStore();
+  // Select the action directly to avoid re-renders when unrelated state changes
+  const calculateGridLayout = useAppStore(state => state.calculateGridLayout);
 
   // Recalculate grid layout on window resize
   useEffect(() => {
