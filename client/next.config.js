@@ -1,17 +1,17 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  images: {
-    unoptimized: true,
-  },
-  experimental: {
-    serverActions: {
-      bodySizeLimit: '10mb', // Only define it here
-    },
-  },
+  // output: 'export',
+  // eslint: {
+  //   ignoreDuringBuilds: true,
+  // },
+  // images: {
+  //   unoptimized: true,
+  // },
+  // experimental: {
+  //   serverActions: {
+  //     bodySizeLimit: '10mb', // Only define it here
+  //   },
+  // },
   async rewrites() {
     return [
       {
