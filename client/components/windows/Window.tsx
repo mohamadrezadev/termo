@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useRef, useEffect } from 'react';
+import { ReactNode, useRef } from 'react';
 import { Rnd } from 'react-rnd';
 import { useAppStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
@@ -29,15 +29,9 @@ export default function Window({
   } = useAppStore();
   
   const windowRef = useRef<any>(null);
-  const window = windows.find(w => w.id === id);
+  const windowState = windows.find(w => w.id === id);
 
-  useEffect(() => {
-    if (windowRef.current && window && windowRef.current.resizableElement) {
-      (windowRef.current.resizableElement as any).style.zIndex = window.zIndex.toString();
-    }
-  }, [window?.zIndex, windowRef]);
-
-  if (!window || !window.isOpen) {
+  if (!windowState || !windowState.isOpen) {
     return null;
   }
 
@@ -52,8 +46,8 @@ export default function Window({
   return (
     <Rnd
       ref={windowRef}
-      size={window.size}
-      position={window.position}
+      size={windowState.size}
+      position={windowState.position}
       minWidth={minWidth}
       minHeight={minHeight}
       bounds="parent"
@@ -72,7 +66,7 @@ export default function Window({
       }}
       onMouseDown={handleMouseDown}
       className="bg-gray-800 border border-gray-600 rounded-lg shadow-2xl overflow-hidden"
-      style={{ zIndex: window.zIndex }}
+      style={{ zIndex: windowState.zIndex }}
       enableResizing={{
         top: true,
         right: true,
