@@ -24,7 +24,8 @@ export default function Reports() {
     images,
     activeImageId,
     markers,
-    regions
+    regions,
+    globalParameters
   } = useAppStore();
 
   const t = translations[language];
@@ -229,6 +230,17 @@ export default function Reports() {
               <p><strong>Operator:</strong> {currentProject.operator}</p>
               <p><strong>Company:</strong> {currentProject.company}</p>
               <p><strong>Date:</strong> {currentProject.date.toLocaleDateString()}</p>
+            </>
+          )}
+          {reportSettings.includeParameters && (
+            <>
+              <h2>Measurement Parameters</h2>
+              <p><strong>{t.emissivity}:</strong> {globalParameters.emissivity}</p>
+              <p><strong>{t.ambientTemp}:</strong> {globalParameters.ambientTemp}°C</p>
+              <p><strong>{t.reflectedTemp}:</strong> {globalParameters.reflectedTemp}°C</p>
+              <p><strong>{t.humidity}:</strong> {globalParameters.humidity}%</p>
+              <p><strong>{t.distance}:</strong> {globalParameters.distance}m</p>
+              <p><strong>{t.dewpoint}:</strong> {(globalParameters.ambientTemp - (100 - globalParameters.humidity) / 5).toFixed(1)}°C</p>
             </>
           )}
           {reportSettings.includeImages && (
