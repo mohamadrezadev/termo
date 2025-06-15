@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback, useEffect, useLayoutEffect } from 'react';
 import { useAppStore } from '@/lib/store';
 import { translations } from '@/lib/translations';
 import Window from './Window';
@@ -25,7 +25,8 @@ export default function RealImageViewer() {
     panX,
     panY,
     setZoom,
-    setPan
+    setPan,
+    updateWindow
   } = useAppStore();
 
   const t = translations[language];
@@ -36,6 +37,18 @@ export default function RealImageViewer() {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   const activeImage = images.find(img => img.id === activeImageId);
+
+  useLayoutEffect(() => {
+    if (activeImage?.realImage) {
+      const img = new Image();
+      img.onload = () => {
+        updateWindow('real-image-viewer', {
+          size: { width: img.width, height: img.height }
+        });
+      };
+      img.src = activeImage.realImage;
+    }
+  }, [activeImage?.realImage, updateWindow]);
 
   useEffect(() => {
     if (activeImage) {

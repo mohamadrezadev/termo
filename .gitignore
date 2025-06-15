@@ -4,3 +4,4 @@ client/node_modules/
 client/.next/
 node_modules
 venv
+server/extracted_images/
