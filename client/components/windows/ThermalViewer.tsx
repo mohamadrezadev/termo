@@ -5,12 +5,12 @@ import { useAppStore } from '@/lib/store';
 import { translations } from '@/lib/translations';
 import {
   getTemperatureAtPixel,
-  extractThermalData,
   COLOR_PALETTES,
   ThermalData, // Added for prop typing
   processThermalBmpFromServer,
   ThermalImage, // For constructing the new image object
-  renderThermalCanvas // Ensure this is imported
+  renderThermalCanvas, // Ensure this is imported
+  Region
 } from '@/lib/thermal-utils';
 import Window from './Window';
 // import ThermalImageRenderer from './ThermalImageRenderer'; // Import the new component
@@ -453,22 +453,24 @@ useLayoutEffect(() => {
     setIsDragging(false);
 
     if (activeTool === 'rectangle' && isDrawing && currentRegion && currentRegion.points.length === 2) {
+      if (!activeImage) return;
       // Validate points to ensure width/height > 0 before finalizing
       if (currentRegion.points[0].x === currentRegion.points[1].x || currentRegion.points[0].y === currentRegion.points[1].y) {
           setIsDrawing(false);
           setCurrentRegion(null);
           return; // Ignore zero-area rectangles
       }
-      const region = {
+      let region: Region = {
         id: generateId(),
-        type: 'rectangle'as const,
+        type: 'rectangle' as const,
         points: currentRegion.points, // These are already image coordinates
         minTemp: 0,
         maxTemp: 0,
         avgTemp: 0,
         label: `Rectangle ${regions.length + 1}`,
         emissivity: 0.95,
-        imageId: activeImage.id // Associate region with the active image
+        imageId: activeImage.id,
+        area: 0
       };
       
       // Calculate temperature statistics for the region
@@ -523,7 +525,7 @@ useLayoutEffect(() => {
           return;
       }
 
-      const region = {
+      let region: Region = {
         id: generateId(),
         type: 'polygon' as const,
         points: finalPoints,
@@ -532,7 +534,8 @@ useLayoutEffect(() => {
         avgTemp: 0,
         label: `Polygon ${regions.length + 1}`,
         emissivity: 0.95,
-        imageId: activeImage.id // Associate region with the active image
+        imageId: activeImage ? activeImage.id : '',
+        area: 0
       };
       
       // Calculate temperature statistics for the region

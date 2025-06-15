@@ -17,17 +17,16 @@ import {
 } from 'lucide-react';
 
 export default function RealImageViewer() {
-  const {
-    language,
-    images,
-    activeImageId,
-    zoom,
-    panX,
-    panY,
-    setZoom,
-    setPan,
-    updateWindow
-  } = useAppStore();
+  // Select only the pieces of state this component actually uses.
+  const language = useAppStore(state => state.language);
+  const images = useAppStore(state => state.images);
+  const activeImageId = useAppStore(state => state.activeImageId);
+  const zoom = useAppStore(state => state.zoom);
+  const panX = useAppStore(state => state.panX);
+  const panY = useAppStore(state => state.panY);
+  const setZoom = useAppStore(state => state.setZoom);
+  const setPan = useAppStore(state => state.setPan);
+  const updateWindow = useAppStore(state => state.updateWindow);
 
   const t = translations[language];
   const imageRef = useRef<HTMLImageElement>(null);
@@ -205,7 +204,7 @@ export default function RealImageViewer() {
                   <div className="text-center">
                     <ImageIcon className="w-16 h-16 mx-auto mb-4" />
                     <p className="text-lg mb-2">No Real Image Available</p>
-                    <p className="text-sm">This thermal image doesn't contain embedded real image data</p>
+                    <p className="text-sm">This thermal image doesn&apos;t contain embedded real image data</p>
                   </div>
                 </div>
               )}

@@ -21,8 +21,19 @@ export default function Histogram() {
   const activeImage = images.find(img => img.id === activeImageId);
   const palette = COLOR_PALETTES[currentPalette];
 
-  const histogramData = useMemo(() => {
-    if (!activeImage?.thermalData) return [];
+  interface HistogramData {
+    data: { temperature: string; count: number; fill: string }[];
+    stats: {
+      mean: string;
+      stdDev: string;
+      min: string;
+      max: string;
+      totalPixels: number;
+    };
+  }
+
+  const histogramData = useMemo<HistogramData | null>(() => {
+    if (!activeImage?.thermalData) return null;
 
     const { temperatureMatrix, minTemp, maxTemp } = activeImage.thermalData;
     const effectiveMin = customMinTemp ?? minTemp;
@@ -79,7 +90,7 @@ export default function Histogram() {
   return (
     <Window id="histogram" title={t.histogram} minWidth={300} minHeight={250}>
       <div className="flex flex-col h-full p-4">
-        {activeImage?.thermalData ? (
+        {activeImage?.thermalData && histogramData ? (
           <>
             {/* Statistics */}
             <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
