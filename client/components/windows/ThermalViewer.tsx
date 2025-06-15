@@ -51,7 +51,8 @@ export default function ThermalViewer() {
     addImage,
     addMarker,
     addRegion,
-    setActiveImage
+    setActiveImage,
+    updateImage
   } = useAppStore();
 
   const t = translations[language];
@@ -96,6 +97,12 @@ export default function ThermalViewer() {
         customMinTemp ?? activeImage.thermalData.minTemp,
         customMaxTemp ?? activeImage.thermalData.maxTemp
       );
+      try {
+        const url = canvas.toDataURL();
+        updateImage(activeImage.id, { preRenderedThermalUrl: url });
+      } catch (e) {
+        console.error('Failed to capture thermal canvas', e);
+      }
     } else if (canvas && !activeImage?.thermalData) {
       // Clear canvas if no image
       const ctx = canvas.getContext('2d');
@@ -103,7 +110,7 @@ export default function ThermalViewer() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
       }
     }
-  }, [activeImage, palette, customMinTemp, customMaxTemp]); // Dependencies: activeImage, palette, and temp overrides
+  }, [activeImage, palette, customMinTemp, customMaxTemp, updateImage]); // Dependencies: activeImage, palette, and temp overrides
 
 
 // ...

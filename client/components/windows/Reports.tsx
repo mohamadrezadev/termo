@@ -237,6 +237,14 @@ export default function Reports() {
               {images.map((img) => (
                 <div key={img.id} style={{ marginBottom: '10px' }}>
                   <p><strong>{img.name}</strong></p>
+                  {img.preRenderedThermalUrl && (
+                    <img
+                      src={img.preRenderedThermalUrl}
+                      alt={`${img.name} thermal`}
+                      style={{ maxWidth: '100%' }}
+                      crossOrigin="anonymous"
+                    />
+                  )}
                   {img.realImage && (
                     <img
                       src={img.realImage}

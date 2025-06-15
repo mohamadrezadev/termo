@@ -74,6 +74,7 @@ export interface AppState {
   setActiveImage: (imageId: string | null) => void;
   addImage: (image: ThermalImage) => void;
   removeImage: (imageId: string) => void;
+  updateImage: (id: string, updates: Partial<ThermalImage>) => void;
   addMarker: (marker: Marker) => void;
   updateMarker: (id: string, updates: Partial<Marker>) => void;
   removeMarker: (id: string) => void;
@@ -256,6 +257,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     activeImageId: state.activeImageId === imageId ? null : state.activeImageId,
     markers: state.markers.filter(marker => marker.id !== imageId),
     regions: state.regions.filter(region => region.id !== imageId)
+  })),
+
+  updateImage: (id, updates) => set((state) => ({
+    images: state.images.map(img =>
+      img.id === id ? { ...img, ...updates } : img
+    )
   })),
 
   addMarker: (marker) => set((state) => ({
