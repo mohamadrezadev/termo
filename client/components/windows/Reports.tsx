@@ -9,18 +9,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  FileText,
-  Download,
-  Eye
-} from 'lucide-react';
+import { FileText, Download, Eye } from 'lucide-react';
 
 export default function Reports() {
   const {
     language,
     currentProject,
     images,
-    activeImageId,
     markers,
     regions
   } = useAppStore();
@@ -45,20 +40,128 @@ export default function Reports() {
     el.style.position = 'static';
     el.style.visibility = 'visible';
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    const logo = 'https://upload.wikimedia.org/wikipedia/commons/a/a7/Logo_Testo.svg';
+    const date = new Date().toLocaleDateString();
+    const qrCodeUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://your-report-link';
+
+    const styles = `
+      @page { margin: 15mm; }
+      body {
+        font-family: 'Segoe UI', sans-serif;
+        font-size: 12px;
+        line-height: 1.7;
+        background: #fff;
+        padding: 15mm;
+        color: #333;
+      }
+      h1 {
+        font-size: 24px;
+        color: #004080;
+        text-align: center;
+        margin-top: 40px;
+        border-bottom: 2px solid #004080;
+        padding-bottom: 10px;
+      }
+      h2 {
+        font-size: 16px;
+        color: #0055aa;
+        margin-top: 28px;
+        margin-bottom: 10px;
+        border-bottom: 1px solid #ccc;
+        padding-bottom: 3px;
+      }
+      p, li {
+        margin: 6px 0;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 20px;
+      }
+      th, td {
+        border: 1px solid #999;
+        padding: 6px;
+        background: #f9f9f9;
+        text-align: left;
+      }
+      td.temp-high {
+        color: red;
+        font-weight: bold;
+      }
+      img {
+        display: block;
+        margin: 10px auto;
+        max-width: 90%;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+      .header, .cover {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+      }
+      .header img, .cover img { height: 50px; }
+      .cover {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        margin-top: 100px;
+      }
+      .cover h1 { font-size: 28px; }
+      .cover p { font-size: 14px; color: #555; }
+      .qr {
+        text-align: center;
+        margin-top: 40px;
+      }
+      footer {
+        position: fixed;
+        bottom: 10mm;
+        width: 100%;
+        text-align: center;
+        font-size: 10px;
+        color: #888;
+      }
+    `;
+
+    const getTempClass = (temp: number | null | undefined) => {
+      return temp && temp > 80 ? 'temp-high' : '';
+    };
+
+    const contentHtml = `
+      <div class="cover">
+        <img src="${logo}" alt="Logo" />
+        <h1>${reportSettings.title}</h1>
+        <p>${currentProject?.company || 'Company'} - ${date}</p>
+      </div>
+
+      ${el.innerHTML}
+
+      <div class="qr">
+        <p>Access this report online:</p>
+        <img src="${qrCodeUrl}" alt="QR Code" />
+      </div>
+
+      <footer>Page <span class="pageNumber"></span> of <span class="totalPages"></span> | Thermal Analysis App</footer>
+    `;
 
     if (format === 'pdf') {
       const html2pdf = (await import('html2pdf.js')).default;
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = `<style>${styles}</style>${contentHtml}`;
+
       await html2pdf().set({
         margin: 10,
         filename: `${reportSettings.title.replace(/\s+/g, '_')}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 2 },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      }).from(el).save();
+      }).from(wrapper).save();
     } else {
-      const htmlContent = el.innerHTML;
-      const blob = new Blob([htmlContent], { type: 'text/html' });
+      const htmlDoc = `<!DOCTYPE html><html><head><meta charset="utf-8" /><title>${reportSettings.title}</title><style>${styles}</style></head><body>${contentHtml}</body></html>`;
+      const blob = new Blob([htmlDoc], { type: 'text/html' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -71,6 +174,7 @@ export default function Reports() {
     el.style.left = '-9999px';
     el.style.visibility = 'hidden';
   };
+
 
   return (
     <Window id="reports" title={t.reports} minWidth={350} minHeight={400}>
@@ -95,8 +199,7 @@ export default function Reports() {
           <div className="space-y-3">
             <Label className="text-sm">Include in Report</Label>
             <div className="space-y-2">
-              {[
-                { id: 'include-images', label: `Thermal & Real Images (${images.length})`, key: 'includeImages' },
+              {[{ id: 'include-images', label: `Thermal & Real Images (${images.length})`, key: 'includeImages' },
                 { id: 'include-markers', label: `Temperature Markers (${markers.length})`, key: 'includeMarkers' },
                 { id: 'include-regions', label: `Analysis Regions (${regions.length})`, key: 'includeRegions' },
                 { id: 'include-parameters', label: 'Measurement Parameters', key: 'includeParameters' },
@@ -129,25 +232,16 @@ export default function Reports() {
 
         <div className="p-3 bg-gray-750 border-t border-gray-600 space-y-3">
           <div className="flex items-center space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex-1"
-              onClick={() => handleGenerateReport('pdf')}
-            >
-              <Eye className="w-4 h-4 mr-1" />
-              {t.preview}
+            <Button variant="outline" size="sm" className="flex-1" onClick={() => handleGenerateReport('pdf')}>
+              <Eye className="w-4 h-4 mr-1" />{t.preview}
             </Button>
           </div>
-
           <div className="grid grid-cols-2 gap-2">
             <Button size="sm" onClick={() => handleGenerateReport('pdf')} className="h-8">
-              <Download className="w-3 h-3 mr-1" />
-              PDF
+              <Download className="w-3 h-3 mr-1" /> PDF
             </Button>
             <Button size="sm" variant="outline" onClick={() => handleGenerateReport('html')} className="h-8">
-              <FileText className="w-3 h-3 mr-1" />
-              HTML
+              <FileText className="w-3 h-3 mr-1" /> HTML
             </Button>
           </div>
         </div>
@@ -167,23 +261,7 @@ export default function Reports() {
             color: '#000'
           }}
         >
-          <div dangerouslySetInnerHTML={{ __html: `
-            <style>
-              h1 { font-size: 20px; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 5px; }
-              h2 { font-size: 16px; margin-top: 24px; margin-bottom: 8px; border-bottom: 1px solid #ccc; padding-bottom: 3px; }
-              p, li { font-size: 12px; margin: 4px 0; }
-              ul { padding-left: 20px; margin-bottom: 12px; }
-              table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-              th, td { border: 1px solid #999; padding: 6px; font-size: 12px; text-align: left; }
-              img { margin-top: 4px; margin-bottom: 8px; max-width: 100%; height: auto; border: 1px solid #ccc; }
-              .section { margin-bottom: 24px; }
-              .page-break { page-break-before: always; }
-              table, tr, td, th { page-break-inside: avoid; }
-            </style>
-          ` }} />
-
           <h1>{reportSettings.title}</h1>
-
           <div className="section">
             <h2>1. Project Information</h2>
             <p><strong>Company:</strong> {currentProject?.company || '—'}</p>
@@ -221,82 +299,63 @@ export default function Reports() {
             <p><strong>Pressure Difference:</strong> —</p>
           </div>
 
-          {reportSettings.includeImages && images.length > 0 && (
-            <div className="section page-break">
-              <h2>5. Images</h2>
-              {images.map((img) => (
-                <div key={img.id} style={{ marginBottom: '12px' }}>
-                  <p><strong>{img.name}</strong></p>
-                  {img.realImage && (
-                    <img src={img.realImage} alt={img.name} crossOrigin="anonymous" />
-                  )}
-                  <p>Max Temp: {img.maxTemp ?? '—'} °F</p>
-                  <p>Min Temp: {img.minTemp ?? '—'} °F</p>
-                </div>
-              ))}
-            </div>
-          )}
+          <div className="section">
+            <h2>5. Images</h2>
+            {images.map((img) => (
+              <div key={img.id} style={{ marginBottom: '12px' }}>
+                <p><strong>{img.name}</strong></p>
+                {img.realImage && (
+                  <img src={img.realImage} alt={img.name} crossOrigin="anonymous" />
+                )}
+                <p>Max Temp: {img.maxTemp ?? '—'} °F</p>
+                <p>Min Temp: {img.minTemp ?? '—'} °F</p>
+              </div>
+            ))}
+          </div>
 
-          {reportSettings.includeMarkers && markers.length > 0 && (
-            <div className="section">
-              <h2>6. Temperature Markers</h2>
-              <table>
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>X</th>
-                    <th>Y</th>
-                    <th>Temp (°F)</th>
+          <div className="section">
+            <h2>6. Temperature Markers</h2>
+            <table>
+              <thead>
+                <tr><th>#</th><th>X</th><th>Y</th><th>Temp (°F)</th></tr>
+              </thead>
+              <tbody>
+                {markers.map((m, i) => (
+                  <tr key={i}>
+                    <td>{i + 1}</td>
+                    <td>{m.x}</td>
+                    <td>{m.y}</td>
+                    <td>{m.temperature ?? '—'}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {markers.map((m, i) => (
-                    <tr key={i}>
-                      <td>{i + 1}</td>
-                      <td>{m.x}</td>
-                      <td>{m.y}</td>
-                      <td>{m.temperature ?? '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-          {reportSettings.includeRegions && regions.length > 0 && (
-            <div className="section">
-              <h2>7. Analysis Regions</h2>
-              <table>
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Type</th>
-                    <th>Avg Temp</th>
-                    <th>Min Temp</th>
-                    <th>Max Temp</th>
+          <div className="section">
+            <h2>7. Analysis Regions</h2>
+            <table>
+              <thead>
+                <tr><th>#</th><th>Type</th><th>Avg Temp</th><th>Min Temp</th><th>Max Temp</th></tr>
+              </thead>
+              <tbody>
+                {regions.map((r, i) => (
+                  <tr key={i}>
+                    <td>{i + 1}</td>
+                    <td>{r.type || '—'}</td>
+                    <td>{r.avgTemp ?? '—'} °F</td>
+                    <td>{r.minTemp ?? '—'} °F</td>
+                    <td>{r.maxTemp ?? '—'} °F</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {regions.map((r, i) => (
-                    <tr key={i}>
-                      <td>{i + 1}</td>
-                      <td>{r.type || '—'}</td>
-                      <td>{r.avgTemp ?? '—'} °F</td>
-                      <td>{r.minTemp ?? '—'} °F</td>
-                      <td>{r.maxTemp ?? '—'} °F</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-          {reportSettings.includeStatistics && (
-            <div className="section">
-              <h2>8. Statistical Analysis</h2>
-              <p>—</p>
-            </div>
-          )}
+          <div className="section">
+            <h2>8. Statistical Analysis</h2>
+            <p>—</p>
+          </div>
 
           <div className="section">
             <h2>9. Deviations from Test Standards</h2>
