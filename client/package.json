@@ -10,8 +10,9 @@
     "lint": "next lint",
     "export": "next export",
     "build:static": "npm run build && npm run export",
+    "preelectron:build": "npm run build:static && node ./scripts/copy-backend.js",
     "electron:dev": "npm run build:static && electron .",
-    "electron:build": "npm run build:static && electron-builder"
+    "electron:build": "npm run preelectron:build && electron-builder"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -80,23 +81,36 @@
   },
   "devDependencies": {
     "electron": "^36.4.0",
-    "electron-builder": "^26.0.12"
+    "electron-builder": "^26.0.12",
+    "fs-extra": "^11.2.0"
   },
   "build": {
     "appId": "com.example.thermalanalyzer",
     "productName": "Thermal Analyzer",
     "directories": {
-      "output": "dist_electron"
+      "output": "dist_electron",
+      "app": "."
     },
     "files": [
       "main.js",
       "out/**/*",
-      "bmp-extractor-server/**/*",
-      "node_modules/**/*",
-      "package.json"
+      "package.json",
+      {
+        "from": "dist_backend_temp/thermal_api",
+        "to": "server_executable_build/thermal_api"
+      }
+    ],
+    "asarUnpack": [
+      "server_executable_build/thermal_api/**/*"
     ],
     "win": {
       "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
     }
   }
 }
