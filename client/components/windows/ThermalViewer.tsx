@@ -87,8 +87,33 @@ export default function ThermalViewer() {
 
   useEffect(() => {
     const canvas = mainCanvasRef.current;
-    if (canvas && activeImage?.thermalData && palette) {
-      console.log('[THERMAL_VIEWER] Rendering thermal image to main canvas.');
+    if (!canvas) {
+      return;
+    }
+
+    if (activeImage?.serverRenderedThermalUrl) {
+      console.log('[THERMAL_VIEWER] Rendering server-provided thermal image.');
+      const img = new Image();
+      img.crossOrigin = "anonymous"; // Good practice for cross-origin images
+      img.onload = () => {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, img.width, img.height);
+        }
+      };
+      img.onerror = () => {
+        console.error('[THERMAL_VIEWER] Error loading server-provided thermal image.');
+        // Optionally, clear canvas or fall back to client rendering if desired
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+      };
+      img.src = activeImage.serverRenderedThermalUrl;
+    } else if (activeImage?.thermalData && palette) {
+      console.log('[THERMAL_VIEWER] Rendering thermal image with client-side palette.');
       renderThermalCanvas(
         canvas,
         activeImage.thermalData,
@@ -96,8 +121,9 @@ export default function ThermalViewer() {
         customMinTemp ?? activeImage.thermalData.minTemp,
         customMaxTemp ?? activeImage.thermalData.maxTemp
       );
-    } else if (canvas && !activeImage?.thermalData) {
-      // Clear canvas if no image
+    } else {
+      // Clear canvas if no image data or server URL
+      console.log('[THERMAL_VIEWER] No thermal data to render, clearing canvas.');
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -180,6 +206,7 @@ useLayoutEffect(() => {
           name: file.name,
           thermalData: thermalData, // Can be null if thermal processing failed or no URL
           realImage: realImageUrl,   // Can be null if no real image URL
+          serverRenderedThermalUrl: thermalResult?.url ?? null, // New line
         };
 
         console.log('[UPLOAD] Adding new image to store:', newImage);
@@ -786,4 +813,3 @@ useLayoutEffect(() => {
   );
 
 }
-

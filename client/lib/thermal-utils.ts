@@ -26,6 +26,7 @@ export interface ThermalImage {
   realImage: string | null;
   canvas?: HTMLCanvasElement;
   preRenderedThermalUrl?: string;
+  serverRenderedThermalUrl?: string | null; // New field
 }
 
 export interface Marker {
@@ -216,7 +217,6 @@ export async function processThermalBmpFromServer(imageUrl: string): Promise<The
     URL.revokeObjectURL(objectUrl);
   }
 }
-
 export function getTemperatureAtPixel(thermalData: ThermalData, x: number, y: number): number | null {
   if (x < 0 || x >= thermalData.width || y < 0 || y >= thermalData.height) {
     return null;
