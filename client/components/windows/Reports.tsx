@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useAppStore } from '@/lib/store';
 import { translations } from '@/lib/translations';
 import Window from './Window';
@@ -9,12 +9,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { 
-  FileText, 
-  Download, 
-  Printer,
-  Eye,
-  Mail
+import {
+  FileText,
+  Download,
+  Eye
 } from 'lucide-react';
 
 export default function Reports() {
@@ -38,17 +36,45 @@ export default function Reports() {
     notes: ''
   });
 
-  const activeImage = images.find(img => img.id === activeImageId);
+  const reportRef = useRef<HTMLDivElement>(null);
 
-  const handleGenerateReport = (format: 'pdf' | 'docx' | 'html') => {
-    console.log('Generating report in format:', format);
-    // Report generation logic would go here
+  const handleGenerateReport = async (format: 'pdf' | 'html') => {
+    if (!reportRef.current) return;
+    const el = reportRef.current;
+
+    el.style.position = 'static';
+    el.style.visibility = 'visible';
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    if (format === 'pdf') {
+      const html2pdf = (await import('html2pdf.js')).default;
+      await html2pdf().set({
+        margin: 10,
+        filename: `${reportSettings.title.replace(/\s+/g, '_')}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      }).from(el).save();
+    } else {
+      const htmlContent = el.innerHTML;
+      const blob = new Blob([htmlContent], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${reportSettings.title.replace(/\s+/g, '_')}.html`;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+
+    el.style.position = 'absolute';
+    el.style.left = '-9999px';
+    el.style.visibility = 'hidden';
   };
 
   return (
     <Window id="reports" title={t.reports} minWidth={350} minHeight={400}>
       <div className="flex flex-col h-full">
-        {/* Header */}
         <div className="p-3 bg-gray-750 border-b border-gray-600">
           <h3 className="text-sm font-medium flex items-center">
             <FileText className="w-4 h-4 mr-2" />
@@ -56,9 +82,7 @@ export default function Reports() {
           </h3>
         </div>
 
-        {/* Content */}
         <div className="flex-1 p-4 space-y-4 overflow-auto">
-          {/* Report Title */}
           <div className="space-y-2">
             <Label className="text-sm">Report Title</Label>
             <Input
@@ -68,79 +92,30 @@ export default function Reports() {
             />
           </div>
 
-          {/* Include Options */}
           <div className="space-y-3">
             <Label className="text-sm">Include in Report</Label>
-            
             <div className="space-y-2">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="include-images"
-                  checked={reportSettings.includeImages}
-                  onCheckedChange={(checked) => 
-                    setReportSettings(prev => ({ ...prev, includeImages: !!checked }))
-                  }
-                />
-                <Label htmlFor="include-images" className="text-sm">
-                  Thermal & Real Images ({images.length})
-                </Label>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="include-markers"
-                  checked={reportSettings.includeMarkers}
-                  onCheckedChange={(checked) => 
-                    setReportSettings(prev => ({ ...prev, includeMarkers: !!checked }))
-                  }
-                />
-                <Label htmlFor="include-markers" className="text-sm">
-                  Temperature Markers ({markers.length})
-                </Label>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="include-regions"
-                  checked={reportSettings.includeRegions}
-                  onCheckedChange={(checked) => 
-                    setReportSettings(prev => ({ ...prev, includeRegions: !!checked }))
-                  }
-                />
-                <Label htmlFor="include-regions" className="text-sm">
-                  Analysis Regions ({regions.length})
-                </Label>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="include-parameters"
-                  checked={reportSettings.includeParameters}
-                  onCheckedChange={(checked) => 
-                    setReportSettings(prev => ({ ...prev, includeParameters: !!checked }))
-                  }
-                />
-                <Label htmlFor="include-parameters" className="text-sm">
-                  Measurement Parameters
-                </Label>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="include-statistics"
-                  checked={reportSettings.includeStatistics}
-                  onCheckedChange={(checked) => 
-                    setReportSettings(prev => ({ ...prev, includeStatistics: !!checked }))
-                  }
-                />
-                <Label htmlFor="include-statistics" className="text-sm">
-                  Statistical Analysis
-                </Label>
-              </div>
+              {[
+                { id: 'include-images', label: `Thermal & Real Images (${images.length})`, key: 'includeImages' },
+                { id: 'include-markers', label: `Temperature Markers (${markers.length})`, key: 'includeMarkers' },
+                { id: 'include-regions', label: `Analysis Regions (${regions.length})`, key: 'includeRegions' },
+                { id: 'include-parameters', label: 'Measurement Parameters', key: 'includeParameters' },
+                { id: 'include-statistics', label: 'Statistical Analysis', key: 'includeStatistics' }
+              ].map(item => (
+                <div key={item.id} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={item.id}
+                    checked={reportSettings[item.key]}
+                    onCheckedChange={(checked) =>
+                      setReportSettings(prev => ({ ...prev, [item.key]: !!checked }))
+                    }
+                  />
+                  <Label htmlFor={item.id} className="text-sm">{item.label}</Label>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Notes */}
           <div className="space-y-2">
             <Label className="text-sm">Additional Notes</Label>
             <Textarea
@@ -150,22 +125,8 @@ export default function Reports() {
               className="h-20 text-sm"
             />
           </div>
-
-          {/* Project Info */}
-          {currentProject && (
-            <div className="space-y-2 p-3 bg-gray-800 rounded border">
-              <h4 className="text-sm font-medium">Project Information</h4>
-              <div className="text-xs text-gray-400 space-y-1">
-                <div>Name: {currentProject.name}</div>
-                <div>Operator: {currentProject.operator}</div>
-                <div>Company: {currentProject.company}</div>
-                <div>Date: {currentProject.date.toLocaleDateString()}</div>
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Actions */}
         <div className="p-3 bg-gray-750 border-t border-gray-600 space-y-3">
           <div className="flex items-center space-x-2">
             <Button
@@ -179,53 +140,175 @@ export default function Reports() {
             </Button>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
-            <Button
-              size="sm"
-              onClick={() => handleGenerateReport('pdf')}
-              className="h-8"
-            >
+          <div className="grid grid-cols-2 gap-2">
+            <Button size="sm" onClick={() => handleGenerateReport('pdf')} className="h-8">
               <Download className="w-3 h-3 mr-1" />
               PDF
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => handleGenerateReport('docx')}
-              className="h-8"
-            >
-              <FileText className="w-3 h-3 mr-1" />
-              DOCX
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => handleGenerateReport('html')}
-              className="h-8"
-            >
+            <Button size="sm" variant="outline" onClick={() => handleGenerateReport('html')} className="h-8">
               <FileText className="w-3 h-3 mr-1" />
               HTML
             </Button>
           </div>
+        </div>
 
-          <div className="flex space-x-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="flex-1 h-8"
-            >
-              <Printer className="w-3 h-3 mr-1" />
-              Print
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="flex-1 h-8"
-            >
-              <Mail className="w-3 h-3 mr-1" />
-              Email
-            </Button>
+        <div
+          ref={reportRef}
+          style={{
+            position: 'absolute',
+            left: '-9999px',
+            top: 0,
+            width: '210mm',
+            padding: '20mm',
+            background: 'white',
+            fontFamily: 'Arial, sans-serif',
+            fontSize: '12px',
+            lineHeight: '1.6',
+            color: '#000'
+          }}
+        >
+          <div dangerouslySetInnerHTML={{ __html: `
+            <style>
+              h1 { font-size: 20px; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 5px; }
+              h2 { font-size: 16px; margin-top: 24px; margin-bottom: 8px; border-bottom: 1px solid #ccc; padding-bottom: 3px; }
+              p, li { font-size: 12px; margin: 4px 0; }
+              ul { padding-left: 20px; margin-bottom: 12px; }
+              table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+              th, td { border: 1px solid #999; padding: 6px; font-size: 12px; text-align: left; }
+              img { margin-top: 4px; margin-bottom: 8px; max-width: 100%; height: auto; border: 1px solid #ccc; }
+              .section { margin-bottom: 24px; }
+              .page-break { page-break-before: always; }
+              table, tr, td, th { page-break-inside: avoid; }
+            </style>
+          ` }} />
+
+          <h1>{reportSettings.title}</h1>
+
+          <div className="section">
+            <h2>1. Project Information</h2>
+            <p><strong>Company:</strong> {currentProject?.company || '—'}</p>
+            <p><strong>Customer:</strong> —</p>
+            <p><strong>Location:</strong> —</p>
+            <p><strong>Purpose:</strong> —</p>
+            <p><strong>Date:</strong> {currentProject?.date?.toLocaleDateString() || '—'}</p>
+            <p><strong>Method:</strong> Based on EN 13187 using thermal imaging.</p>
           </div>
+
+          <div className="section">
+            <h2>2. Device Information</h2>
+            <p><strong>Device:</strong> Testo 882</p>
+            <p><strong>Serial No:</strong> 1906934</p>
+            <p><strong>Lens:</strong> 32° × 23°</p>
+            <p><strong>Emissivity:</strong> 0.95</p>
+            <p><strong>Reflected Temp:</strong> 68°F</p>
+          </div>
+
+          <div className="section">
+            <h2>3. Building Description</h2>
+            <p><strong>Structure:</strong> —</p>
+            <p><strong>Orientation:</strong> —</p>
+            <p><strong>Surroundings:</strong> —</p>
+          </div>
+
+          <div className="section">
+            <h2>4. Weather Conditions</h2>
+            <p><strong>Outdoor Temp (24h min/max/current):</strong> — / — / —</p>
+            <p><strong>Indoor Temp:</strong> —</p>
+            <p><strong>Temp Difference:</strong> —</p>
+            <p><strong>Solar Radiation (12h / current):</strong> — / —</p>
+            <p><strong>Rain:</strong> —</p>
+            <p><strong>Wind Speed / Direction:</strong> — / —</p>
+            <p><strong>Pressure Difference:</strong> —</p>
+          </div>
+
+          {reportSettings.includeImages && images.length > 0 && (
+            <div className="section page-break">
+              <h2>5. Images</h2>
+              {images.map((img) => (
+                <div key={img.id} style={{ marginBottom: '12px' }}>
+                  <p><strong>{img.name}</strong></p>
+                  {img.realImage && (
+                    <img src={img.realImage} alt={img.name} crossOrigin="anonymous" />
+                  )}
+                  <p>Max Temp: {img.maxTemp ?? '—'} °F</p>
+                  <p>Min Temp: {img.minTemp ?? '—'} °F</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {reportSettings.includeMarkers && markers.length > 0 && (
+            <div className="section">
+              <h2>6. Temperature Markers</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>X</th>
+                    <th>Y</th>
+                    <th>Temp (°F)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {markers.map((m, i) => (
+                    <tr key={i}>
+                      <td>{i + 1}</td>
+                      <td>{m.x}</td>
+                      <td>{m.y}</td>
+                      <td>{m.temperature ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {reportSettings.includeRegions && regions.length > 0 && (
+            <div className="section">
+              <h2>7. Analysis Regions</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Type</th>
+                    <th>Avg Temp</th>
+                    <th>Min Temp</th>
+                    <th>Max Temp</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {regions.map((r, i) => (
+                    <tr key={i}>
+                      <td>{i + 1}</td>
+                      <td>{r.type || '—'}</td>
+                      <td>{r.avgTemp ?? '—'} °F</td>
+                      <td>{r.minTemp ?? '—'} °F</td>
+                      <td>{r.maxTemp ?? '—'} °F</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {reportSettings.includeStatistics && (
+            <div className="section">
+              <h2>8. Statistical Analysis</h2>
+              <p>—</p>
+            </div>
+          )}
+
+          <div className="section">
+            <h2>9. Deviations from Test Standards</h2>
+            <p>—</p>
+          </div>
+
+          {reportSettings.notes && (
+            <div className="section">
+              <h2>10. Additional Notes</h2>
+              <p>{reportSettings.notes}</p>
+            </div>
+          )}
         </div>
       </div>
     </Window>

@@ -15,6 +15,7 @@ import {
 import Window from './Window';
 // import ThermalImageRenderer from './ThermalImageRenderer'; // Import the new component
 import { Button } from '@/components/ui/button';
+import { useLayoutEffect } from 'react';
 import { 
   MousePointer, 
   MapPin, 
@@ -130,7 +131,19 @@ export default function ThermalViewer() {
     }
   }, [activeImage, palette, customMinTemp, customMaxTemp]); // Dependencies: activeImage, palette, and temp overrides
 
-const handleFileUpload = useCallback(async (files: FileList) => {
+
+// ...
+const { updateWindow } = useAppStore();
+
+useLayoutEffect(() => {
+  if (activeImage?.thermalData) {
+    const { width, height } = activeImage.thermalData;
+    updateWindow('thermal-viewer', {
+      size: { width, height }
+    });
+  }
+}, [activeImage?.thermalData]);
+  const handleFileUpload = useCallback(async (files: FileList) => {
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
 
@@ -798,6 +811,5 @@ const handleFileUpload = useCallback(async (files: FileList) => {
       </div>
     </Window>
   );
+
 }
-
-

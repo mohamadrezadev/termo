@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback, useEffect, useLayoutEffect } from 'react';
 import { useAppStore } from '@/lib/store';
 import { translations } from '@/lib/translations';
 import Window from './Window';
@@ -25,7 +25,8 @@ export default function RealImageViewer() {
     panX,
     panY,
     setZoom,
-    setPan
+    setPan,
+    updateWindow
   } = useAppStore();
 
   const t = translations[language];
@@ -37,13 +38,37 @@ export default function RealImageViewer() {
 
   const activeImage = images.find(img => img.id === activeImageId);
 
+  useLayoutEffect(() => {
+    if (activeImage?.realImage) {
+      const img = new Image();
+      img.onload = () => {
+        updateWindow('real-image-viewer', {
+          size: { width: img.width, height: img.height }
+        });
+      };
+      img.src = activeImage.realImage;
+    }
+  }, [activeImage?.realImage, updateWindow]);
+
   useEffect(() => {
     if (activeImage) {
       console.log(`[REAL_IMG_VIEWER] Attempting to render real image. Active image ID: ${activeImage.id}, RealImage URL: ${activeImage.realImage}`);
     } else {
       console.log(`[REAL_IMG_VIEWER] No active image, so no real image to render.`);
     }
-  }, [activeImage?.realImage, activeImage?.id]); // Added activeImage.id for more context if URL is null
+  }, [activeImage?.realImage, activeImage?.id]);
+
+  useEffect(() => {
+    if (imageRef.current && activeImage?.realImage) {
+      const img = imageRef.current;
+
+      img.onload = () => {
+        console.log(`[REAL_IMG_VIEWER] Real image loaded. Dimensions: ${img.naturalWidth}x${img.naturalHeight}`);
+        img.width = img.naturalWidth;
+        img.height = img.naturalHeight;
+      };
+    }
+  }, [activeImage?.realImage]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (isDragging) {
@@ -80,7 +105,6 @@ export default function RealImageViewer() {
   return (
     <Window id="real-image-viewer" title={t.realImageViewer} minWidth={400} minHeight={300}>
       <div className="flex flex-col h-full">
-        {/* Toolbar */}
         <div className="flex items-center justify-between p-2 bg-gray-750 border-b border-gray-600">
           <div className="flex items-center space-x-1">
             {fusionModes.map((mode) => (
@@ -98,40 +122,19 @@ export default function RealImageViewer() {
           </div>
 
           <div className="flex items-center space-x-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0"
-              onClick={handleZoomOut}
-              title={t.zoomOut}
-            >
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={handleZoomOut} title={t.zoomOut}>
               <ZoomOut className="w-4 h-4" />
             </Button>
-            <span className="text-xs text-gray-400 min-w-[3rem] text-center">
-              {Math.round(zoom * 100)}%
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0"
-              onClick={handleZoomIn}
-              title={t.zoomIn}
-            >
+            <span className="text-xs text-gray-400 min-w-[3rem] text-center">{Math.round(zoom * 100)}%</span>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={handleZoomIn} title={t.zoomIn}>
               <ZoomIn className="w-4 h-4" />
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0"
-              onClick={handleResetView}
-              title={t.resetZoom}
-            >
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={handleResetView} title={t.resetZoom}>
               <RotateCcw className="w-4 h-4" />
             </Button>
           </div>
         </div>
 
-        {/* Overlay Controls */}
         {fusionMode === 'overlay' && (
           <div className="flex items-center space-x-2 p-2 bg-gray-750 border-b border-gray-600">
             <span className="text-xs text-gray-400">Opacity:</span>
@@ -142,13 +145,10 @@ export default function RealImageViewer() {
               step={1}
               className="flex-1 max-w-32"
             />
-            <span className="text-xs text-gray-400 min-w-[3rem]">
-              {overlayOpacity}%
-            </span>
+            <span className="text-xs text-gray-400 min-w-[3rem]">{overlayOpacity}%</span>
           </div>
         )}
 
-        {/* Image Container */}
         <div className="flex-1 relative overflow-hidden bg-gray-900">
           {activeImage ? (
             <div
@@ -158,8 +158,7 @@ export default function RealImageViewer() {
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseUp}
             >
-              {/* Show real image if available, otherwise show thermal */}
-              {(fusionMode === 'visual' || fusionMode === 'overlay') && activeImage.realImage ? (
+              {(fusionMode === 'visual' || fusionMode === 'overlay') && activeImage.realImage && (
                 <img
                   ref={imageRef}
                   src={activeImage.realImage}
@@ -167,23 +166,21 @@ export default function RealImageViewer() {
                   className="absolute top-0 left-0 max-w-none"
                   style={{
                     transform: `scale(${zoom}) translate(${panX / zoom}px, ${panY / zoom}px)`,
-                    transformOrigin: '0 0',
-                    opacity: fusionMode === 'overlay' ? overlayOpacity / 100 : 1
+                    transformOrigin: 'top left',
+                    opacity: fusionMode === 'overlay' ? overlayOpacity / 100 : 1,
+                    transition: 'transform 0.1s ease-out'
                   }}
-                  onError={(e) => {
-                    console.error(`[REAL_IMG_VIEWER] Error loading real image. URL: ${e.currentTarget.src}`, e);
-                  }}
+                  onError={(e) => console.error(`[REAL_IMG_VIEWER] Error loading real image. URL: ${e.currentTarget.src}`, e)}
                   draggable={false}
                 />
-              ) : null}
-              
-              {/* Show thermal image */}
+              )}
+
               {(fusionMode === 'thermal' || fusionMode === 'overlay') && activeImage.canvas && (
                 <canvas
                   className="absolute top-0 left-0 max-w-none pointer-events-none"
                   style={{
                     transform: `scale(${zoom}) translate(${panX / zoom}px, ${panY / zoom}px)`,
-                    transformOrigin: '0 0',
+                    transformOrigin: 'top left',
                     opacity: fusionMode === 'overlay' ? (100 - overlayOpacity) / 100 : 1,
                     mixBlendMode: fusionMode === 'overlay' ? 'multiply' : 'normal'
                   }}
@@ -203,13 +200,12 @@ export default function RealImageViewer() {
                 />
               )}
 
-              {/* Fallback if no real image */}
               {!activeImage.realImage && fusionMode === 'visual' && (
                 <div className="flex items-center justify-center h-full text-gray-400">
                   <div className="text-center">
                     <ImageIcon className="w-16 h-16 mx-auto mb-4" />
                     <p className="text-lg mb-2">No Real Image Available</p>
-                    <p className="text-sm">This thermal image doesn&apos;t contain embedded real image data</p>
+                    <p className="text-sm">This thermal image doesn't contain embedded real image data</p>
                   </div>
                 </div>
               )}
@@ -225,7 +221,6 @@ export default function RealImageViewer() {
           )}
         </div>
 
-        {/* Status Bar */}
         <div className="h-6 bg-gray-750 border-t border-gray-600 flex items-center justify-between px-2 text-xs text-gray-400">
           <div className="flex items-center space-x-4">
             <span>Mode: {fusionMode}</span>
