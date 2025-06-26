@@ -5,3 +5,7 @@ client/.next/
 node_modules
 venv
 server/extracted_images/
+server/dist/
+server/build/
+
+
