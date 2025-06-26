@@ -7,6 +7,19 @@ import { COLOR_PALETTES, interpolateColor, ColorPalette } from '@/lib/thermal-ut
 import Window from './Window';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell } from 'recharts';
 
+type HistogramStats = {
+  mean: string;
+  stdDev: string;
+  min: string;
+  max: string;
+  totalPixels: number;
+};
+
+interface HistogramData {
+  data: { temperature: string; count: number; fill: string }[];
+  stats?: HistogramStats;
+}
+
 export default function Histogram() {
   const {
     language,
@@ -21,8 +34,8 @@ export default function Histogram() {
   const activeImage = images.find(img => img.id === activeImageId);
   const palette = COLOR_PALETTES[currentPalette];
 
-  const histogramData = useMemo(() => {
-    if (!activeImage?.thermalData) return [];
+  const histogramData = useMemo<HistogramData>(() => {
+    if (!activeImage?.thermalData) return { data: [], stats: undefined };
 
     const { temperatureMatrix, minTemp, maxTemp } = activeImage.thermalData;
     const effectiveMin = customMinTemp ?? minTemp;

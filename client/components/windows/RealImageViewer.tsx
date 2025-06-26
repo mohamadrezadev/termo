@@ -205,7 +205,7 @@ export default function RealImageViewer() {
                   <div className="text-center">
                     <ImageIcon className="w-16 h-16 mx-auto mb-4" />
                     <p className="text-lg mb-2">No Real Image Available</p>
-                    <p className="text-sm">This thermal image doesn't contain embedded real image data</p>
+                    <p className="text-sm">This thermal image doesn&apos;t contain embedded real image data</p>
                   </div>
                 </div>
               )}

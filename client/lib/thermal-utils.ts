@@ -37,6 +37,7 @@ export interface Marker {
   temperature: number;
   label: string;
   emissivity: number;
+  imageId?: string;
 }
 
 export interface Region {
@@ -49,6 +50,7 @@ export interface Region {
   area?: number;
   label: string;
   emissivity: number;
+  imageId?: string;
 }
 
 export interface ColorPalette {

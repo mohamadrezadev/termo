@@ -1,21 +1,20 @@
 'use client';
 
-import { useRef, useEffect, useState, useCallback, useEffect as useReactEffect } from 'react'; // Added useEffect again for clarity, though it's already there. Will ensure only one import.
+import { useRef, useEffect, useState, useCallback, useLayoutEffect } from 'react';
 import { useAppStore } from '@/lib/store';
 import { translations } from '@/lib/translations';
 import {
   getTemperatureAtPixel,
-  extractThermalData,
   COLOR_PALETTES,
   ThermalData, // Added for prop typing
   processThermalBmpFromServer,
   ThermalImage, // For constructing the new image object
+  Region,
   renderThermalCanvas // Ensure this is imported
 } from '@/lib/thermal-utils';
 import Window from './Window';
 // import ThermalImageRenderer from './ThermalImageRenderer'; // Import the new component
 import { Button } from '@/components/ui/button';
-import { useLayoutEffect } from 'react';
 import { 
   MousePointer, 
   MapPin, 
@@ -405,7 +404,7 @@ useLayoutEffect(() => {
           temperature: temp,
           label: `Point ${markers.length + 1}`,
           emissivity: 0.95,
-          imageId: activeImage.id,
+          imageId: activeImage?.id ?? '',
         };
         addMarker(marker);
       }
@@ -479,7 +478,7 @@ useLayoutEffect(() => {
           setCurrentRegion(null);
           return; // Ignore zero-area rectangles
       }
-      const region = {
+      const region: Region = {
         id: generateId(),
         type: 'rectangle'as const,
         points: currentRegion.points, // These are already image coordinates
@@ -488,7 +487,7 @@ useLayoutEffect(() => {
         avgTemp: 0,
         label: `Rectangle ${regions.length + 1}`,
         emissivity: 0.95,
-        imageId: activeImage.id // Associate region with the active image
+        imageId: activeImage?.id ?? '' // Associate region with the active image
       };
       
       // Calculate temperature statistics for the region
@@ -543,7 +542,7 @@ useLayoutEffect(() => {
           return;
       }
 
-      const region = {
+      const region: Region = {
         id: generateId(),
         type: 'polygon' as const,
         points: finalPoints,
@@ -552,7 +551,7 @@ useLayoutEffect(() => {
         avgTemp: 0,
         label: `Polygon ${regions.length + 1}`,
         emissivity: 0.95,
-        imageId: activeImage.id // Associate region with the active image
+        imageId: activeImage?.id ?? '' // Associate region with the active image
       };
       
       // Calculate temperature statistics for the region

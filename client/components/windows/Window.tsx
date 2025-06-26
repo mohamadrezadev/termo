@@ -28,12 +28,12 @@ export default function Window({
     toggleWindow 
   } = useAppStore();
   
-  const windowRef = useRef<HTMLDivElement>(null);
+  const windowRef = useRef<Rnd | null>(null);
   const window = windows.find(w => w.id === id);
 
   useEffect(() => {
-    if (windowRef.current && window && windowRef.current.style) {
-      windowRef.current.style.zIndex = window.zIndex.toString();
+    if (windowRef.current && window) {
+      (windowRef.current as any).style.zIndex = window.zIndex.toString();
     }
   }, [window?.zIndex, windowRef.current]);
 

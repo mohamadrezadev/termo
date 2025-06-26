@@ -15,6 +15,18 @@ import {
   Eye
 } from 'lucide-react';
 
+type ReportSettings = {
+  title: string;
+  includeImages: boolean;
+  includeMarkers: boolean;
+  includeRegions: boolean;
+  includeParameters: boolean;
+  includeStatistics: boolean;
+  notes: string;
+};
+
+type IncludeKey = Exclude<keyof ReportSettings, 'title' | 'notes'>;
+
 export default function Reports() {
   const {
     language,
@@ -26,7 +38,7 @@ export default function Reports() {
   } = useAppStore();
 
   const t = translations[language];
-  const [reportSettings, setReportSettings] = useState({
+  const [reportSettings, setReportSettings] = useState<ReportSettings>({
     title: 'Thermal Analysis Report',
     includeImages: true,
     includeMarkers: true,
@@ -95,13 +107,13 @@ export default function Reports() {
           <div className="space-y-3">
             <Label className="text-sm">Include in Report</Label>
             <div className="space-y-2">
-              {[
-                { id: 'include-images', label: `Thermal & Real Images (${images.length})`, key: 'includeImages' },
-                { id: 'include-markers', label: `Temperature Markers (${markers.length})`, key: 'includeMarkers' },
-                { id: 'include-regions', label: `Analysis Regions (${regions.length})`, key: 'includeRegions' },
-                { id: 'include-parameters', label: 'Measurement Parameters', key: 'includeParameters' },
-                { id: 'include-statistics', label: 'Statistical Analysis', key: 'includeStatistics' }
-              ].map(item => (
+              {([
+                { id: 'include-images', label: `Thermal & Real Images (${images.length})`, key: 'includeImages' as IncludeKey },
+                { id: 'include-markers', label: `Temperature Markers (${markers.length})`, key: 'includeMarkers' as IncludeKey },
+                { id: 'include-regions', label: `Analysis Regions (${regions.length})`, key: 'includeRegions' as IncludeKey },
+                { id: 'include-parameters', label: 'Measurement Parameters', key: 'includeParameters' as IncludeKey },
+                { id: 'include-statistics', label: 'Statistical Analysis', key: 'includeStatistics' as IncludeKey }
+              ]).map(item => (
                 <div key={item.id} className="flex items-center space-x-2">
                   <Checkbox
                     id={item.id}
@@ -230,8 +242,8 @@ export default function Reports() {
                   {img.realImage && (
                     <img src={img.realImage} alt={img.name} crossOrigin="anonymous" />
                   )}
-                  <p>Max Temp: {img.maxTemp ?? '—'} °F</p>
-                  <p>Min Temp: {img.minTemp ?? '—'} °F</p>
+                  <p>Max Temp: {img.thermalData?.maxTemp ?? '—'} °F</p>
+                  <p>Min Temp: {img.thermalData?.minTemp ?? '—'} °F</p>
                 </div>
               ))}
             </div>
