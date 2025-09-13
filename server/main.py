@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 from fastapi.responses import FileResponse, JSONResponse
 import shutil
 from PIL import Image
@@ -9,49 +10,51 @@ import uuid
 import struct
 import logging
 
-# Add startup event to ensure directories exist and server is ready
-@app.on_event("startup")
-async def startup_event():
-    """Ensure required directories exist on startup."""
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-    os.makedirs(EXTRACT_DIR, exist_ok=True)
-    logger.info("Server startup complete - directories initialized")
-
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000", "file://", "http://127.0.0.1:3000", "*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_DIR = os.path.join(BASE_DIR, "temp_uploads")
 EXTRACT_DIR = os.path.join(BASE_DIR, "extracted_images")
 
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-os.makedirs(EXTRACT_DIR, exist_ok=True)
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Lifespan for startup/shutdown (replaces @app.on_event("startup"))
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    os.makedirs(EXTRACT_DIR, exist_ok=True)
+    logger.info("Server startup complete - directories initialized")
+    yield
+    logger.info("Server shutdown complete")
 
 
+app = FastAPI(lifespan=lifespan)
+
+# CORS Middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins for dev; adjust for prod
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# Global exception handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """Catch-all handler that logs unhandled exceptions."""
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
+# Serve static images
 @app.get("/static_images/{filename}")
 async def serve_static_image(filename: str):
     file_path = os.path.join(EXTRACT_DIR, filename)
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Image not found")
     return FileResponse(
-        file_path, 
+        file_path,
         headers={
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -61,7 +64,7 @@ async def serve_static_image(filename: str):
     )
 
 
-
+# Extract BMPs from file
 def extract_bmps(file_path: str, original_filename: str):
     with open(file_path, 'rb') as f:
         data = f.read()
@@ -121,19 +124,22 @@ def extract_bmps(file_path: str, original_filename: str):
     return results
 
 
+# Upload endpoint
 @app.post("/api/extract-bmps-py")
 async def upload_file(request: Request, file: UploadFile = File(...)):
     if not file:
         raise HTTPException(status_code=400, detail="No file provided.")
-    
+
     filename = file.filename
     temp_path = os.path.join(UPLOAD_DIR, f"{uuid.uuid4().hex}_{filename}")
     logger.info(f"[UPLOAD] Received file: {filename}")
 
-    with open(temp_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
     try:
+        # Save uploaded file to temp
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # Extract images
         extracted = extract_bmps(temp_path, filename)
         if not extracted:
             raise HTTPException(status_code=400, detail="No BMP found.")
@@ -149,6 +155,10 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
         }
 
     finally:
-        os.remove(temp_path)
-        await file.close()
-        logger.info(f"[UPLOAD] Temp file removed: {temp_path}")
+        # Cleanup
+        try:
+            os.remove(temp_path)
+            await file.close()
+            logger.info(f"[UPLOAD] Temp file removed: {temp_path}")
+        except Exception as e:
+            logger.warning(f"Failed to cleanup temp file: {e}")
