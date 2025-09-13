@@ -77,8 +77,11 @@ To run the application in development mode, you'll need to start both the server
       npm run dev
       ```
       The client application will typically be available at `http://localhost:3000`.
-
+     
     - The application should now be running, with the client communicating with the server.
+    if run buld file use this command 
+        npm install -g serve
+        serve -s out
 
 ## Simplified Development Run (Using `run-dev.sh`)
 

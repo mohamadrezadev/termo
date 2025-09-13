@@ -5,7 +5,6 @@ import { useAppStore } from '@/lib/store';
 import { translations } from '@/lib/translations';
 import {
   getTemperatureAtPixel,
-  extractThermalData,
   COLOR_PALETTES,
   ThermalData, // Added for prop typing
   processThermalBmpFromServer,
@@ -153,8 +152,8 @@ useLayoutEffect(() => {
 
       // Use dynamic server URL for desktop app
       const serverUrl = process.env.NODE_ENV === 'development' 
-        ? 'http://localhost:8000' 
-        : 'http://127.0.0.1:8000';
+        ? 'http://localhost:8080' 
+        : 'http://127.0.0.1:8080';
       
       const res = await fetch(`${serverUrl}/api/extract-bmps-py`, {
         method: 'POST',
