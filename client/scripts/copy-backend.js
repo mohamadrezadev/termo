@@ -12,10 +12,19 @@ async function copyBackend() {
   try {
     if (!fs.existsSync(backendSourceDir)) {
       console.error(`Error: Backend source directory does not exist: ${backendSourceDir}`);
-      console.error('Please ensure the Python backend has been built using PyInstaller (e.g., in server/dist/thermal_api).');
-      console.error('You might need to run the PyInstaller command manually in the "server" directory if it failed previously.');
+      console.error('Backend not built yet. Run "npm run build:backend" first or ensure PyInstaller build completed successfully.');
       process.exit(1);
     }
+    
+    // Verify the backend executable exists
+    const executableName = process.platform === 'win32' ? 'thermal_api.exe' : 'thermal_api';
+    const executablePath = path.join(backendSourceDir, executableName);
+    if (!fs.existsSync(executablePath)) {
+      console.error(`Backend executable not found: ${executablePath}`);
+      console.error('PyInstaller build may have failed. Check the build output.');
+      process.exit(1);
+    }
+    
     console.log(`Ensuring temporary backend destination parent directory exists: ${backendDestParentDir}`);
     await fs.ensureDir(backendDestParentDir); // Create parent if it doesn't exist
 

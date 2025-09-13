@@ -151,7 +151,11 @@ export function renderThermalCanvas(
 }
 
 export async function processThermalBmpFromServer(imageUrl: string): Promise<ThermalData> {
-  const response = await fetch(imageUrl);
+  // For desktop app, ensure we can fetch from local server
+  const response = await fetch(imageUrl, {
+    mode: 'cors',
+    credentials: 'omit'
+  });
   if (!response.ok) {
     throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
   }

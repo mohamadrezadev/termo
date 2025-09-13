@@ -151,9 +151,16 @@ useLayoutEffect(() => {
       const formData = new FormData();
       formData.append('file', file);
 
-      const res = await fetch('http://localhost:8000/api/extract-bmps-py', {
+      // Use dynamic server URL for desktop app
+      const serverUrl = process.env.NODE_ENV === 'development' 
+        ? 'http://localhost:8000' 
+        : 'http://127.0.0.1:8000';
+      
+      const res = await fetch(`${serverUrl}/api/extract-bmps-py`, {
         method: 'POST',
         body: formData,
+        mode: 'cors',
+        credentials: 'omit'
       });
 
       // It's good practice to check for res.ok before calling res.json()

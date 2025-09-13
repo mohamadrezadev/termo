@@ -102,76 +102,72 @@ This section describes how to build the complete desktop application, including 
 
 Ensure you have met all prerequisites mentioned in the "Prerequisites" section (Python 3.7+, Node.js 18+, npm). Additionally, you'll need:
 
-*   **PyInstaller**: If not already installed in your Python environment for the server, you can install it via pip.
+*   **PyInstaller**: Install it in your Python environment: `pip install pyinstaller`
 *   Project dependencies installed for both server and client as described in the "Setup" section:
     *   Server: `pip install -r server/requirements.txt` (preferably in a virtual environment). Also ensure `pyinstaller` is available to this environment.
     *   Client: `npm install` in the `client` directory.
 
-### Step 1: Build the Python Backend Executable
+### Quick Build (Recommended)
 
-The Python FastAPI backend needs to be compiled into an executable using PyInstaller. This executable will then be bundled with the Electron application.
+1. **Install all dependencies:**
+   ```bash
+   # Install server dependencies
+   cd server
+   pip install -r requirements.txt
+   pip install pyinstaller
+   cd ..
+   
+   # Install client dependencies
+   cd client
+   npm install
+   cd ..
+   ```
 
-1.  **Navigate to the server directory:**
-    ```bash
-    cd server
-    ```
-2.  **Activate your Python virtual environment** (if you are using one):
-    *   On Windows: `.\venv\Scripts\activate`
-    *   On macOS/Linux: `source venv/bin/activate`
-3.  **Install PyInstaller** (if not already installed in this environment):
-    ```bash
-    pip install pyinstaller
-    ```
-4.  **Run PyInstaller to build the backend:**
-    The following command bundles the FastAPI application (`main.py`) into a single directory named `thermal_api` within `server/dist/`.
-    ```bash
-    pyinstaller main.py \
-        --name thermal_api \
-        --onedir \
-        --noconsole \
-        --hidden-import="uvicorn.lifespan.on" \
-        --hidden-import="uvicorn.lifespan.off" \
-        --hidden-import="uvicorn.loops.auto" \
-        --hidden-import="uvicorn.protocols.auto" \
-        --hidden-import="uvicorn.protocols.http.auto" \
-        --hidden-import="uvicorn.protocols.websockets.auto" \
-        --hidden-import="fastapi.applications" \
-        --hidden-import="fastapi.middleware" \
-        --hidden-import="fastapi.routing" \
-        --hidden-import="starlette.routing" \
-        --hidden-import="pydantic.v1" \
-        --collect-submodules uvicorn \
-        --collect-submodules fastapi \
-        --collect-submodules starlette
-    ```
-    *   `--onedir`: Creates a one-folder bundle containing the executable and its dependencies.
-    *   `--noconsole`: (Primarily for Windows) Prevents the console window from appearing when the backend runs.
-    *   `--hidden-import` and `--collect-submodules`: Help PyInstaller correctly bundle all necessary parts of FastAPI, Uvicorn, and Starlette.
-    *   Upon successful completion, you should have a `server/dist/thermal_api` directory containing the backend executable and associated files.
+2. **Build the complete desktop application:**
+   ```bash
+   cd client
+   npm run electron:build
+   ```
 
-### Step 2: Build the Electron Desktop Application
+   This command will:
+   - Build the Next.js frontend
+   - Build the Python backend with PyInstaller
+   - Copy the backend to the correct location
+   - Package everything with Electron Builder
 
-Once the Python backend executable is built, you can build the Electron application which will package this backend.
+3. **Find your distributable:**
+   The built application will be in `client/dist_electron/`
 
-1.  **Navigate to the client directory:**
-    ```bash
-    cd client
-    ```
-    (If you were in the `server` directory, use `cd ../client`)
+### Manual Step-by-Step Build
 
-2.  **Run the Electron build script:**
-    ```bash
-    npm run electron:build
-    ```
-    This command performs several actions:
-    *   Builds the static Next.js frontend assets (`npm run build:static`).
-    *   Copies the Python backend executable (from `server/dist/thermal_api`) into a temporary location within the `client` directory (`client/dist_backend_temp/thermal_api`) using the `scripts/copy-backend.js` script.
-    *   Runs `electron-builder` to package the Electron application. `electron-builder` is configured (in `client/package.json`) to include the copied backend executable and unpack it correctly within the final application bundle.
+If you prefer to build step by step:
 
-3.  **Locate the distributable package:**
-    After the build process finishes, you will find the distributable application packages (e.g., `.exe`, `.dmg`, `.AppImage`) in the `client/dist_electron/` directory.
+1. **Build the Python backend:**
+   ```bash
+   cd client
+   npm run build:backend
+   ```
 
-### Step 3: Install and Run the Desktop Application
+2. **Build the frontend:**
+   ```bash
+   npm run build:static
+   ```
+
+3. **Package with Electron:**
+   ```bash
+   npm run electron:build
+   ```
+
+### Development Mode
+
+To test the desktop app in development:
+
+```bash
+cd client
+npm run electron:dev
+```
+
+### Install and Run the Desktop Application
 
 1.  **Navigate to the output directory:** `client/dist_electron/`.
 2.  **Install the application:**
@@ -179,6 +175,13 @@ Once the Python backend executable is built, you can build the Electron applicat
     *   **macOS:** Open the `.dmg` file and drag the `Thermal Analyzer.app` to your Applications folder.
     *   **Linux:** The `.AppImage` file can often be made executable (`chmod +x Thermal-Analyzer-<version>.AppImage`) and run directly. For `.deb` or `.rpm` packages, use your system's package manager to install them.
 3.  **Run the application:** Launch "Thermal Analyzer" from your applications menu or desktop shortcut. The application should start, and the Python backend will run automatically in the background.
+
+### Troubleshooting
+
+- **Backend build fails:** Ensure PyInstaller is installed and all Python dependencies are available
+- **Frontend build fails:** Run `npm install` in the client directory
+- **Desktop app doesn't start:** Check that both frontend and backend built successfully
+- **Images don't load:** Verify the server is starting correctly (check console logs)
 
 ## Project Structure
 

@@ -47,33 +47,32 @@ function getBackendExecutablePath() {
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: 1600,
+    height: 1000,
+    minWidth: 1200,
+    minHeight: 800,
+    icon: process.platform === 'win32' ? 'assets/icon.ico' : 'assets/icon.png', // Add icon if available
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      // preload: path.join(__dirname, 'preload.js'), // Uncomment if you have a preload script
-      // webSecurity: process.env.NODE_ENV === 'development' ? false : true, // Disable for dev if facing CORS, but ensure it's on for prod.
+      webSecurity: false, // Disable for local server communication
+      allowRunningInsecureContent: true,
     }
   });
 
-  const startURL = app.isPackaged
-    ? `file://${path.join(__dirname, 'out', 'index.html')}` // Packaged app loads from file
-    : 'http://localhost:3000'; // Development loads from Next.js dev server (or 'out' if preferred)
+  // Always load from static files for desktop app
+  const indexPath = path.join(__dirname, 'out', 'index.html');
+  mainWindow.loadFile(indexPath);
 
-  if (app.isPackaged) {
-    mainWindow.loadFile(path.join(__dirname, 'out', 'index.html'));
-  } else {
-    // For dev, assuming `npm run dev` (Next.js dev server) is running on port 3000.
-    // And client-side code will fetch from Python server at http://localhost:8000
-    // The `build:static` and `electron:dev` script loads from `out/index.html` after build.
-    // So we should be consistent with that.
-    mainWindow.loadFile(path.join(__dirname, 'out', 'index.html'));
-    mainWindow.webContents.openDevTools(); // Open DevTools in development
+  // Open DevTools only in development
+  if (!app.isPackaged) {
+    mainWindow.webContents.openDevTools();
   }
 
-
-  // mainWindow.webContents.openDevTools(); // Optional: for debugging
+  // Handle window closed
+  mainWindow.on('closed', () => {
+    // Dereference the window object
+  });
 }
 
 app.whenReady().then(() => {
@@ -110,10 +109,13 @@ app.whenReady().then(() => {
       backendProcess.stdout.on('data', (data) => {
         const logMessage = data.toString();
         console.log(`[Backend STDOUT]: ${logMessage.trim()}`);
-        if (logMessage.includes("Uvicorn running on http://127.0.0.1:8000") || logMessage.includes("Application startup complete")) {
+        if (logMessage.includes("Uvicorn running") || logMessage.includes("Application startup complete") || logMessage.includes("Started server process")) {
             if (!windowCreated) {
                 console.log("[Electron Main] Backend server started successfully. Creating window.");
-                createWindow();
+                // Add a small delay to ensure server is fully ready
+                setTimeout(() => {
+                  createWindow();
+                }, 1000);
                 windowCreated = true;
             }
         }

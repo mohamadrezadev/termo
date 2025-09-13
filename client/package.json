@@ -10,9 +10,10 @@
     "lint": "next lint",
     "export": "next export",
     "build:static": "npm run build && npm run export",
-    "preelectron:build": "npm run build:static && node ./scripts/copy-backend.js",
+    "preelectron:build": "npm run build:static && node ./scripts/build-backend.js && node ./scripts/copy-backend.js",
     "electron:dev": "npm run build:static && electron .",
-    "electron:build": "npm run preelectron:build && electron-builder"
+    "electron:build": "npm run preelectron:build && electron-builder",
+    "build:backend": "node ./scripts/build-backend.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

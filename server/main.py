@@ -9,11 +9,19 @@ import uuid
 import struct
 import logging
 
+# Add startup event to ensure directories exist and server is ready
+@app.on_event("startup")
+async def startup_event():
+    """Ensure required directories exist on startup."""
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    os.makedirs(EXTRACT_DIR, exist_ok=True)
+    logger.info("Server startup complete - directories initialized")
+
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "file://", "http://127.0.0.1:3000", "*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -42,7 +50,15 @@ async def serve_static_image(filename: str):
     file_path = os.path.join(EXTRACT_DIR, filename)
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Image not found")
-    return FileResponse(file_path, headers={"Access-Control-Allow-Origin": "*"})
+    return FileResponse(
+        file_path, 
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+            "Cache-Control": "no-cache"
+        }
+    )
 
 
 
