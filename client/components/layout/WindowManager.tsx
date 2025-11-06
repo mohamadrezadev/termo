@@ -10,15 +10,12 @@ interface WindowManagerProps {
 export default function WindowManager({ children }: WindowManagerProps) {
   const { calculateGridLayout } = useAppStore();
 
-  // Recalculate grid layout on window resize
   useEffect(() => {
     const handleResize = () => {
       calculateGridLayout();
     };
 
     window.addEventListener('resize', handleResize);
-    
-    // Initial calculation
     calculateGridLayout();
 
     return () => {
@@ -27,8 +24,11 @@ export default function WindowManager({ children }: WindowManagerProps) {
   }, [calculateGridLayout]);
 
   return (
-    <div className="absolute inset-0 overflow-hidden bg-gray-900">
-      {children}
+    <div className="absolute inset-0 overflow-auto bg-gray-900">
+      {/* Container با حداقل ابعاد برای فعال کردن اسکرول */}
+      <div className="relative min-w-[1400px] min-h-[900px] w-full h-full">
+        {children}
+      </div>
     </div>
   );
 }

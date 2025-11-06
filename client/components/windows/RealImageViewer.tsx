@@ -21,13 +21,12 @@ export default function RealImageViewer() {
     language,
     images,
     activeImageId,
-    zoom,
-    panX,
-    panY,
-    setZoom,
-    setPan,
-    updateWindow
+    realView,
+    setRealZoom,
+    setRealPan
   } = useAppStore();
+  
+  const { zoom, panX, panY } = realView;
 
   const t = translations[language];
   const imageRef = useRef<HTMLImageElement>(null);
@@ -37,18 +36,6 @@ export default function RealImageViewer() {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   const activeImage = images.find(img => img.id === activeImageId);
-
-  useLayoutEffect(() => {
-    if (activeImage?.realImage) {
-      const img = new Image();
-      img.onload = () => {
-        updateWindow('real-image-viewer', {
-          size: { width: img.width, height: img.height }
-        });
-      };
-      img.src = activeImage.realImage;
-    }
-  }, [activeImage?.realImage, updateWindow]);
 
   useEffect(() => {
     if (activeImage) {
@@ -74,10 +61,10 @@ export default function RealImageViewer() {
     if (isDragging) {
       const deltaX = e.clientX - dragStart.x;
       const deltaY = e.clientY - dragStart.y;
-      setPan(panX + deltaX, panY + deltaY);
+      setRealPan(panX + deltaX, panY + deltaY);
       setDragStart({ x: e.clientX, y: e.clientY });
     }
-  }, [isDragging, dragStart, panX, panY, setPan]);
+  }, [isDragging, dragStart, panX, panY, setRealPan]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     setIsDragging(true);
@@ -88,11 +75,11 @@ export default function RealImageViewer() {
     setIsDragging(false);
   }, []);
 
-  const handleZoomIn = () => setZoom(Math.min(zoom * 1.2, 5));
-  const handleZoomOut = () => setZoom(Math.max(zoom / 1.2, 0.1));
+  const handleZoomIn = () => setRealZoom(Math.min(zoom * 1.2, 5));
+  const handleZoomOut = () => setRealZoom(Math.max(zoom / 1.2, 0.1));
   const handleResetView = () => {
-    setZoom(1);
-    setPan(0, 0);
+    setRealZoom(1);
+    setRealPan(0, 0);
   };
 
   const fusionModes = [

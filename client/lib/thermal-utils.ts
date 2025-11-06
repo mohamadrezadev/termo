@@ -28,7 +28,123 @@ export interface ThermalImage {
   preRenderedThermalUrl?: string;
   serverRenderedThermalUrl?: string | null; // New field
 }
+// به lib/thermal-utils.ts این توابع را اضافه/جایگزین کنید
 
+export interface ColorPalette {
+  name: string;
+  colors: string[];
+  description?: string; // توضیح فارسی
+}
+
+export const COLOR_PALETTES: Record<string, ColorPalette> = {
+  iron: {
+    name: 'Iron (آهنی)',
+    description: 'پالت استاندارد صنعتی با کنتراست بالا',
+    colors: ['#000033', '#000055', '#0000aa', '#0033ff', '#0088ff', '#00ddff', '#33ffaa', '#88ff55', '#ddff00', '#ffaa00', '#ff5500', '#ff0000', '#aa0000']
+  },
+  rainbow: {
+    name: 'Rainbow (رنگین‌کمان)',
+    description: 'طیف کامل رنگی برای تشخیص دقیق',
+    colors: ['#0000ff', '#0055ff', '#00aaff', '#00ffff', '#00ff88', '#00ff00', '#88ff00', '#ffff00', '#ffaa00', '#ff5500', '#ff0000', '#ffffff']
+  },
+  grayscale: {
+    name: 'Grayscale (سیاه و سفید)',
+    description: 'مناسب چاپ و مستندسازی',
+    colors: ['#000000', '#1a1a1a', '#333333', '#4d4d4d', '#666666', '#808080', '#999999', '#b3b3b3', '#cccccc', '#e6e6e6', '#ffffff']
+  },
+  hot: {
+    name: 'Hot (داغ)',
+    description: 'تاکید بر نقاط داغ',
+    colors: ['#000000', '#330000', '#660000', '#990000', '#cc0000', '#ff0000', '#ff3300', '#ff6600', '#ff9900', '#ffcc00', '#ffff00', '#ffffff']
+  },
+  cold: {
+    name: 'Cold (سرد)',
+    description: 'تاکید بر نقاط سرد',
+    colors: ['#ffffff', '#ccffff', '#99ffff', '#66ffff', '#33ffff', '#00ffff', '#00ccff', '#0099ff', '#0066ff', '#0033ff', '#0000ff', '#000033']
+  },
+  medical: {
+    name: 'Medical (پزشکی)',
+    description: 'پالت استاندارد تصویربرداری پزشکی',
+    colors: ['#000080', '#0000c0', '#0040ff', '#0080ff', '#00c0ff', '#00ffff', '#80ffff', '#c0ffff', '#ffffff']
+  },
+  sepia: {
+    name: 'Sepia (سپیا)',
+    description: 'نمای کلاسیک و خوانا',
+    colors: ['#1a0f0a', '#2d1b0e', '#4a2f1a', '#6b4423', '#8b5a2b', '#a0673a', '#b8814a', '#cc9966', '#d4a574', '#e0b88c', '#f5deb3']
+  },
+  arctic: {
+    name: 'Arctic (قطبی)',
+    description: 'مناسب تصاویر سرد و یخی',
+    colors: ['#001a33', '#003366', '#004d99', '#0066cc', '#0080ff', '#3399ff', '#66b3ff', '#99ccff', '#cce6ff', '#e6f2ff', '#ffffff']
+  },
+  lava: {
+    name: 'Lava (گدازه)',
+    description: 'مناسب تصاویر بسیار داغ',
+    colors: ['#000000', '#1a0000', '#330000', '#4d0000', '#660000', '#800000', '#990000', '#b30000', '#cc0000', '#e60000', '#ff0000', '#ff3333', '#ff6666', '#ff9999', '#ffcccc']
+  }
+};
+
+const LOW_CONTRAST_THRESHOLD = 0.1;
+
+// بهبود interpolateColor برای دقت بیشتر
+export function interpolateColor(value: number, min: number, max: number, palette: ColorPalette): string {
+  // اگر محدوده خیلی کوچک است، از رنگ میانی استفاده کن
+  if (max === min || (max - min) < LOW_CONTRAST_THRESHOLD) {
+    return palette.colors[Math.floor(palette.colors.length / 2)];
+  }
+  
+  // Normalize value to 0-1
+  const normalized = Math.max(0, Math.min(1, (value - min) / (max - min)));
+  
+  // Map to palette index
+  const index = normalized * (palette.colors.length - 1);
+  const lower = Math.floor(index);
+  const upper = Math.ceil(index);
+  
+  if (lower === upper) return palette.colors[lower];
+  
+  // Interpolate between two colors
+  const factor = index - lower;
+  const colorLower = hexToRgb(palette.colors[lower]);
+  const colorUpper = hexToRgb(palette.colors[upper]);
+  
+  if (!colorLower || !colorUpper) return palette.colors[Math.floor(palette.colors.length / 2)];
+  
+  const r = Math.round(colorLower.r + factor * (colorUpper.r - colorLower.r));
+  const g = Math.round(colorLower.g + factor * (colorUpper.g - colorLower.g));
+  const b = Math.round(colorLower.b + factor * (colorUpper.b - colorLower.b));
+  
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+
+
+
+// تابع کمکی برای ایجاد نمونه از پالت (برای پیش‌نمایش)
+export function createPalettePreview(
+  palette: ColorPalette,
+  width: number = 256,
+  height: number = 20
+): string {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  
+  if (!ctx) return '';
+  
+  const gradient = ctx.createLinearGradient(0, 0, width, 0);
+  const numColors = palette.colors.length;
+  
+  palette.colors.forEach((color, index) => {
+    gradient.addColorStop(index / (numColors - 1), color);
+  });
+  
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+  
+  return canvas.toDataURL();
+}
 export interface Marker {
   id: string;
   type: 'point' | 'hotspot' | 'coldspot';
@@ -56,53 +172,10 @@ export interface ColorPalette {
   colors: string[];
 }
 
-export const COLOR_PALETTES: Record<string, ColorPalette> = {
-  iron: {
-    name: 'Iron',
-    colors: ['#000000', '#440154', '#721f81', '#b73779', '#f1605d', '#feb078', '#fcfdbf']
-  },
-  rainbow: {
-    name: 'Rainbow',
-    colors: ['#0000ff', '#00ffff', '#00ff00', '#ffff00', '#ff8000', '#ff0000', '#ffffff']
-  },
-  grayscale: {
-    name: 'Grayscale',
-    colors: ['#000000', '#404040', '#808080', '#c0c0c0', '#ffffff']
-  },
-  sepia: {
-    name: 'Sepia',
-    colors: ['#2d1b0e', '#6b4423', '#a0673a', '#d4a574', '#f5deb3']
-  },
-  medical: {
-    name: 'Medical',
-    colors: ['#000080', '#0040c0', '#0080ff', '#40c0ff', '#80ffff', '#c0ffff', '#ffffff']
-  },
-  coldHot: {
-    name: 'Cold/Hot',
-    colors: ['#0000ff', '#8080ff', '#ffffff', '#ff8080', '#ff0000']
-  }
-};
 
-const LOW_CONTRAST_THRESHOLD = 0.1;
 
-export function interpolateColor(value: number, min: number, max: number, palette: ColorPalette): string {
-  if (max === min || (max - min) < LOW_CONTRAST_THRESHOLD) {
-    return palette.colors[Math.floor(palette.colors.length / 2)];
-  }
-  const normalized = Math.max(0, Math.min(1, (value - min) / (max - min)));
-  const index = normalized * (palette.colors.length - 1);
-  const lower = Math.floor(index);
-  const upper = Math.ceil(index);
-  if (lower === upper) return palette.colors[lower];
-  const factor = index - lower;
-  const colorLower = hexToRgb(palette.colors[lower]);
-  const colorUpper = hexToRgb(palette.colors[upper]);
-  if (!colorLower || !colorUpper) return palette.colors[Math.floor(palette.colors.length / 2)];
-  const r = Math.round(colorLower.r + factor * (colorUpper.r - colorLower.r));
-  const g = Math.round(colorLower.g + factor * (colorUpper.g - colorLower.g));
-  const b = Math.round(colorLower.b + factor * (colorUpper.b - colorLower.b));
-  return `rgb(${r}, ${g}, ${b})`;
-}
+
+
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);

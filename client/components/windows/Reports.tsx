@@ -1,8 +1,8 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useAppStore } from '@/lib/store';
-import { translations } from '@/lib/translations';
+import { translations, Language } from '@/lib/translations';
 import Window from './Window';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,14 +10,23 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   FileText,
   Download,
   Eye
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function Reports() {
   const {
     language,
+    isRTL,
     currentProject,
     images,
     activeImageId,
@@ -28,6 +37,7 @@ export default function Reports() {
   const t = translations[language];
   const [reportSettings, setReportSettings] = useState({
     title: 'Thermal Analysis Report',
+    reportLanguage: language as Language,
     includeImages: true,
     includeMarkers: true,
     includeRegions: true,
@@ -36,38 +46,177 @@ export default function Reports() {
     notes: ''
   });
 
+  const [imagesBase64, setImagesBase64] = useState<{ [key: string]: string }>({});
   const reportRef = useRef<HTMLDivElement>(null);
+
+  // تبدیل تصاویر به base64 هنگام تغییر images
+  useEffect(() => {
+    const convertImagesToBase64 = async () => {
+      const base64Images: { [key: string]: string } = {};
+      
+      for (const img of images) {
+        try {
+          // اگر تصویر واقعی دارد
+          if (img.realImage) {
+            // اگر از قبل base64 است
+            if (img.realImage.startsWith('data:')) {
+              base64Images[img.id] = img.realImage;
+            } else {
+              // تبدیل URL به base64
+              const response = await fetch(img.realImage);
+              const blob = await response.blob();
+              const base64 = await new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.readAsDataURL(blob);
+              });
+              base64Images[img.id] = base64;
+            }
+          }
+          
+          // اگر canvas حرارتی دارد
+          if (img.canvas) {
+            base64Images[`${img.id}_thermal`] = img.canvas.toDataURL('image/png');
+          }
+          
+          // اگر URL سرور دارد
+          if (img.serverRenderedThermalUrl) {
+            try {
+              const response = await fetch(img.serverRenderedThermalUrl);
+              const blob = await response.blob();
+              const base64 = await new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.readAsDataURL(blob);
+              });
+              base64Images[`${img.id}_server`] = base64;
+            } catch (error) {
+              console.error('Error converting server image:', error);
+            }
+          }
+        } catch (error) {
+          console.error(`Error converting image ${img.id}:`, error);
+        }
+      }
+      
+      setImagesBase64(base64Images);
+    };
+
+    if (images.length > 0) {
+      convertImagesToBase64();
+    }
+  }, [images]);
 
   const handleGenerateReport = async (format: 'pdf' | 'html') => {
     if (!reportRef.current) return;
+    
+    if (reportSettings.includeImages && Object.keys(imagesBase64).length === 0) {
+      toast.error(language === 'fa' ? 'لطفاً منتظر بمانید تا تصاویر آماده شوند...' : 'Please wait for images to load...');
+      return;
+    }
+
     const el = reportRef.current;
+    const reportLang = reportSettings.reportLanguage;
+    const isReportRTL = reportLang === 'fa';
+    const rt = translations[reportLang];
 
     el.style.position = 'static';
     el.style.visibility = 'visible';
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
-    if (format === 'pdf') {
-      const html2pdf = (await import('html2pdf.js')).default;
-      await html2pdf().set({
-        margin: 10,
-        filename: `${reportSettings.title.replace(/\s+/g, '_')}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      }).from(el).save();
-    } else {
-      const htmlContent = el.innerHTML;
-      const blob = new Blob([htmlContent], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${reportSettings.title.replace(/\s+/g, '_')}.html`;
-      link.click();
-      URL.revokeObjectURL(url);
+    try {
+      if (format === 'pdf') {
+        toast.info(language === 'fa' ? 'در حال تولید PDF...' : 'Generating PDF...');
+        const html2pdf = (await import('html2pdf.js')).default;
+        const options = {
+          margin: 10,
+          filename: `${reportSettings.title.replace(/\s+/g, '_')}.pdf`,
+          image: { type: 'jpeg', quality: 0.95 },
+          html2canvas: { 
+            scale: 2,
+            useCORS: true,
+            allowTaint: true,
+            logging: false
+          },
+          jsPDF: { 
+            unit: 'mm', 
+            format: 'a4', 
+            orientation: 'portrait',
+            compress: true
+          },
+          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+        };
+        
+        await html2pdf().set(options).from(el).save();
+        toast.success(language === 'fa' ? 'گزارش PDF با موفقیت ایجاد شد' : 'PDF report generated successfully');
+      } else {
+        const htmlContent = `
+          <!DOCTYPE html>
+          <html lang="${reportLang}" dir="${isReportRTL ? 'rtl' : 'ltr'}">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>${reportSettings.title}</title>
+            <style>
+              body {
+                font-family: ${isReportRTL ? 'Tahoma, Arial, sans-serif' : 'Arial, sans-serif'};
+                direction: ${isReportRTL ? 'rtl' : 'ltr'};
+                text-align: ${isReportRTL ? 'right' : 'left'};
+                margin: 20px;
+                background: white;
+                color: black;
+              }
+              h1 { 
+                border-bottom: 2px solid #000; 
+                padding-bottom: 10px;
+                margin-bottom: 20px;
+              }
+              h2 { 
+                border-bottom: 1px solid #ccc; 
+                padding-bottom: 5px;
+                margin-top: 30px;
+              }
+              table { 
+                width: 100%; 
+                border-collapse: collapse; 
+                margin: 20px 0;
+              }
+              th, td { 
+                border: 1px solid #999; 
+                padding: 8px; 
+                text-align: ${isReportRTL ? 'right' : 'left'};
+              }
+              th { background: #f0f0f0; }
+              img { 
+                max-width: 100%; 
+                height: auto; 
+                margin: 10px 0;
+                border: 1px solid #ccc;
+              }
+              .section { margin-bottom: 30px; }
+            </style>
+          </head>
+          <body>
+            ${el.innerHTML}
+          </body>
+          </html>
+        `;
+        
+        const blob = new Blob([htmlContent], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${reportSettings.title.replace(/\s+/g, '_')}.html`;
+        link.click();
+        URL.revokeObjectURL(url);
+        toast.success(language === 'fa' ? 'گزارش HTML با موفقیت ایجاد شد' : 'HTML report generated successfully');
+      }
+    } catch (error) {
+      console.error('Error generating report:', error);
+      toast.error(language === 'fa' ? 'خطا در تولید گزارش' : 'Error generating report');
     }
 
-    el.style.position = 'absolute';
     el.style.left = '-9999px';
     el.style.visibility = 'hidden';
   };
@@ -84,7 +233,7 @@ export default function Reports() {
 
         <div className="flex-1 p-4 space-y-4 overflow-auto">
           <div className="space-y-2">
-            <Label className="text-sm">Report Title</Label>
+            <Label className="text-sm">{language === 'fa' ? 'عنوان گزارش' : 'Report Title'}</Label>
             <Input
               value={reportSettings.title}
               onChange={(e) => setReportSettings(prev => ({ ...prev, title: e.target.value }))}
@@ -92,20 +241,36 @@ export default function Reports() {
             />
           </div>
 
+          <div className="space-y-2">
+            <Label className="text-sm">{t.reportLanguage}</Label>
+            <Select
+              value={reportSettings.reportLanguage}
+              onValueChange={(value) => setReportSettings(prev => ({ ...prev, reportLanguage: value as Language }))}
+            >
+              <SelectTrigger className="h-8">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="en">English</SelectItem>
+                <SelectItem value="fa">فارسی</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="space-y-3">
-            <Label className="text-sm">Include in Report</Label>
+            <Label className="text-sm">{language === 'fa' ? 'شامل در گزارش' : 'Include in Report'}</Label>
             <div className="space-y-2">
               {[
-                { id: 'include-images', label: `Thermal & Real Images (${images.length})`, key: 'includeImages' },
-                { id: 'include-markers', label: `Temperature Markers (${markers.length})`, key: 'includeMarkers' },
-                { id: 'include-regions', label: `Analysis Regions (${regions.length})`, key: 'includeRegions' },
-                { id: 'include-parameters', label: 'Measurement Parameters', key: 'includeParameters' },
-                { id: 'include-statistics', label: 'Statistical Analysis', key: 'includeStatistics' }
+                { id: 'include-images', label: `${language === 'fa' ? 'تصاویر حرارتی و واقعی' : 'Thermal & Real Images'} (${images.length})`, key: 'includeImages' },
+                { id: 'include-markers', label: `${language === 'fa' ? 'نشانگرهای دما' : 'Temperature Markers'} (${markers.length})`, key: 'includeMarkers' },
+                { id: 'include-regions', label: `${language === 'fa' ? 'نواحی تحلیل' : 'Analysis Regions'} (${regions.length})`, key: 'includeRegions' },
+                { id: 'include-parameters', label: language === 'fa' ? 'پارامترهای اندازه‌گیری' : 'Measurement Parameters', key: 'includeParameters' },
+                { id: 'include-statistics', label: language === 'fa' ? 'تحلیل آماری' : 'Statistical Analysis', key: 'includeStatistics' }
               ].map(item => (
                 <div key={item.id} className="flex items-center space-x-2">
                   <Checkbox
                     id={item.id}
-                    checked={reportSettings[item.key]}
+                    checked={reportSettings[item.key as keyof typeof reportSettings] as boolean}
                     onCheckedChange={(checked) =>
                       setReportSettings(prev => ({ ...prev, [item.key]: !!checked }))
                     }
@@ -117,41 +282,50 @@ export default function Reports() {
           </div>
 
           <div className="space-y-2">
-            <Label className="text-sm">Additional Notes</Label>
+            <Label className="text-sm">{language === 'fa' ? 'یادداشت‌های اضافی' : 'Additional Notes'}</Label>
             <Textarea
               value={reportSettings.notes}
               onChange={(e) => setReportSettings(prev => ({ ...prev, notes: e.target.value }))}
-              placeholder="Enter any additional notes or observations..."
+              placeholder={language === 'fa' ? 'یادداشت‌ها یا مشاهدات اضافی...' : 'Enter any additional notes or observations...'}
               className="h-20 text-sm"
             />
           </div>
+
+          {reportSettings.includeImages && images.length > 0 && (
+            <div className="text-xs text-gray-400">
+              {Object.keys(imagesBase64).length === 0 
+                ? (language === 'fa' ? '⏳ در حال آماده‌سازی تصاویر...' : '⏳ Preparing images...')
+                : (language === 'fa' ? `✓ ${Object.keys(imagesBase64).length} تصویر آماده` : `✓ ${Object.keys(imagesBase64).length} images ready`)
+              }
+            </div>
+          )}
         </div>
 
         <div className="p-3 bg-gray-750 border-t border-gray-600 space-y-3">
-          <div className="flex items-center space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex-1"
-              onClick={() => handleGenerateReport('pdf')}
-            >
-              <Eye className="w-4 h-4 mr-1" />
-              {t.preview}
-            </Button>
-          </div>
-
           <div className="grid grid-cols-2 gap-2">
-            <Button size="sm" onClick={() => handleGenerateReport('pdf')} className="h-8">
+            <Button 
+              size="sm" 
+              onClick={() => handleGenerateReport('pdf')} 
+              className="h-8"
+              disabled={reportSettings.includeImages && Object.keys(imagesBase64).length === 0}
+            >
               <Download className="w-3 h-3 mr-1" />
               PDF
             </Button>
-            <Button size="sm" variant="outline" onClick={() => handleGenerateReport('html')} className="h-8">
+            <Button 
+              size="sm" 
+              variant="outline" 
+              onClick={() => handleGenerateReport('html')} 
+              className="h-8"
+              disabled={reportSettings.includeImages && Object.keys(imagesBase64).length === 0}
+            >
               <FileText className="w-3 h-3 mr-1" />
               HTML
             </Button>
           </div>
         </div>
 
+        {/* Hidden Report Template */}
         <div
           ref={reportRef}
           style={{
@@ -161,77 +335,102 @@ export default function Reports() {
             width: '210mm',
             padding: '20mm',
             background: 'white',
-            fontFamily: 'Arial, sans-serif',
+            fontFamily: reportSettings.reportLanguage === 'fa' ? 'Tahoma, Arial, sans-serif' : 'Arial, sans-serif',
             fontSize: '12px',
             lineHeight: '1.6',
-            color: '#000'
+            color: '#000',
+            direction: reportSettings.reportLanguage === 'fa' ? 'rtl' : 'ltr',
+            textAlign: reportSettings.reportLanguage === 'fa' ? 'right' : 'left'
           }}
         >
-          <div dangerouslySetInnerHTML={{ __html: `
-            <style>
-              h1 { font-size: 20px; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 5px; }
-              h2 { font-size: 16px; margin-top: 24px; margin-bottom: 8px; border-bottom: 1px solid #ccc; padding-bottom: 3px; }
-              p, li { font-size: 12px; margin: 4px 0; }
-              ul { padding-left: 20px; margin-bottom: 12px; }
-              table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-              th, td { border: 1px solid #999; padding: 6px; font-size: 12px; text-align: left; }
-              img { margin-top: 4px; margin-bottom: 8px; max-width: 100%; height: auto; border: 1px solid #ccc; }
-              .section { margin-bottom: 24px; }
-              .page-break { page-break-before: always; }
-              table, tr, td, th { page-break-inside: avoid; }
-            </style>
-          ` }} />
-
           <h1>{reportSettings.title}</h1>
 
           <div className="section">
-            <h2>1. Project Information</h2>
-            <p><strong>Company:</strong> {currentProject?.company || '—'}</p>
-            <p><strong>Customer:</strong> —</p>
-            <p><strong>Location:</strong> —</p>
-            <p><strong>Purpose:</strong> —</p>
-            <p><strong>Date:</strong> {currentProject?.date?.toLocaleDateString() || '—'}</p>
-            <p><strong>Method:</strong> Based on EN 13187 using thermal imaging.</p>
+            <h2>
+              {reportSettings.reportLanguage === 'fa' ? '۱. اطلاعات پروژه' : '1. Project Information'}
+            </h2>
+            <p><strong>{reportSettings.reportLanguage === 'fa' ? 'نام پروژه:' : 'Project Name:'}</strong> {currentProject?.name || '—'}</p>
+            <p><strong>{reportSettings.reportLanguage === 'fa' ? 'اپراتور:' : 'Operator:'}</strong> {currentProject?.operator || '—'}</p>
+            <p><strong>{reportSettings.reportLanguage === 'fa' ? 'شرکت:' : 'Company:'}</strong> {currentProject?.company || '—'}</p>
+            <p><strong>{reportSettings.reportLanguage === 'fa' ? 'تاریخ:' : 'Date:'}</strong> {currentProject?.date ? new Date(currentProject.date).toLocaleDateString(reportSettings.reportLanguage === 'fa' ? 'fa-IR' : 'en-US') : '—'}</p>
+            {currentProject?.notes && (
+              <p><strong>{reportSettings.reportLanguage === 'fa' ? 'یادداشت‌ها:' : 'Notes:'}</strong> {currentProject.notes}</p>
+            )}
           </div>
 
-          <div className="section">
-            <h2>2. Device Information</h2>
-            <p><strong>Device:</strong> Testo 882</p>
-            <p><strong>Serial No:</strong> 1906934</p>
-            <p><strong>Lens:</strong> 32° × 23°</p>
-            <p><strong>Emissivity:</strong> 0.95</p>
-            <p><strong>Reflected Temp:</strong> 68°F</p>
-          </div>
-
-          <div className="section">
-            <h2>3. Building Description</h2>
-            <p><strong>Structure:</strong> —</p>
-            <p><strong>Orientation:</strong> —</p>
-            <p><strong>Surroundings:</strong> —</p>
-          </div>
-
-          <div className="section">
-            <h2>4. Weather Conditions</h2>
-            <p><strong>Outdoor Temp (24h min/max/current):</strong> — / — / —</p>
-            <p><strong>Indoor Temp:</strong> —</p>
-            <p><strong>Temp Difference:</strong> —</p>
-            <p><strong>Solar Radiation (12h / current):</strong> — / —</p>
-            <p><strong>Rain:</strong> —</p>
-            <p><strong>Wind Speed / Direction:</strong> — / —</p>
-            <p><strong>Pressure Difference:</strong> —</p>
-          </div>
+          {reportSettings.includeParameters && (
+            <div className="section">
+              <h2>
+                {reportSettings.reportLanguage === 'fa' ? '۲. پارامترهای اندازه‌گیری' : '2. Measurement Parameters'}
+              </h2>
+              <p><strong>{reportSettings.reportLanguage === 'fa' ? 'گسیل‌پذیری:' : 'Emissivity:'}</strong> 0.95</p>
+              <p><strong>{reportSettings.reportLanguage === 'fa' ? 'دمای محیط:' : 'Ambient Temperature:'}</strong> 20°C</p>
+              <p><strong>{reportSettings.reportLanguage === 'fa' ? 'دمای بازتابی:' : 'Reflected Temperature:'}</strong> 20°C</p>
+              <p><strong>{reportSettings.reportLanguage === 'fa' ? 'رطوبت:' : 'Humidity:'}</strong> 50%</p>
+              <p><strong>{reportSettings.reportLanguage === 'fa' ? 'فاصله:' : 'Distance:'}</strong> 1.0m</p>
+            </div>
+          )}
 
           {reportSettings.includeImages && images.length > 0 && (
-            <div className="section page-break">
-              <h2>5. Images</h2>
-              {images.map((img) => (
-                <div key={img.id} style={{ marginBottom: '12px' }}>
-                  <p><strong>{img.name}</strong></p>
-                  {img.realImage && (
-                    <img src={img.realImage} alt={img.name} crossOrigin="anonymous" />
+            <div className="section" style={{ pageBreakBefore: 'always' }}>
+              <h2>
+                {reportSettings.reportLanguage === 'fa' ? '۳. تصاویر' : '3. Images'}
+              </h2>
+              {images.map((img, index) => (
+                <div key={img.id} style={{ marginBottom: '20px', pageBreakInside: 'avoid' }}>
+                  <h3 style={{ fontSize: '14px', marginBottom: '10px' }}>
+                    {reportSettings.reportLanguage === 'fa' ? `تصویر ${index + 1}: ` : `Image ${index + 1}: `}
+                    {img.name}
+                  </h3>
+                  
+                  {/* Real Image */}
+                  {imagesBase64[img.id] && (
+                    <div style={{ marginBottom: '10px' }}>
+                      <p style={{ fontSize: '11px', color: '#666', marginBottom: '5px' }}>
+                        {reportSettings.reportLanguage === 'fa' ? 'تصویر واقعی:' : 'Real Image:'}
+                      </p>
+                      <img 
+                        src={imagesBase64[img.id]} 
+                        alt={`${img.name} - Real`}
+                        style={{ 
+                          maxWidth: '100%', 
+                          height: 'auto',
+                          border: '1px solid #ccc',
+                          borderRadius: '4px'
+                        }}
+                      />
+                    </div>
                   )}
-                  <p>Max Temp: {img.maxTemp ?? '—'} °F</p>
-                  <p>Min Temp: {img.minTemp ?? '—'} °F</p>
+                  
+                  {/* Thermal Image */}
+                  {(imagesBase64[`${img.id}_thermal`] || imagesBase64[`${img.id}_server`]) && (
+                    <div style={{ marginBottom: '10px' }}>
+                      <p style={{ fontSize: '11px', color: '#666', marginBottom: '5px' }}>
+                        {reportSettings.reportLanguage === 'fa' ? 'تصویر حرارتی:' : 'Thermal Image:'}
+                      </p>
+                      <img 
+                        src={imagesBase64[`${img.id}_thermal`] || imagesBase64[`${img.id}_server`]} 
+                        alt={`${img.name} - Thermal`}
+                        style={{ 
+                          maxWidth: '100%', 
+                          height: 'auto',
+                          border: '1px solid #ccc',
+                          borderRadius: '4px'
+                        }}
+                      />
+                    </div>
+                  )}
+                  
+                  {/* Temperature Info */}
+                  {img.thermalData && (
+                    <div style={{ fontSize: '11px', marginTop: '5px' }}>
+                      <p>
+                        <strong>{reportSettings.reportLanguage === 'fa' ? 'حداکثر دما:' : 'Max Temp:'}</strong> {img.thermalData.maxTemp.toFixed(1)}°C
+                        {' | '}
+                        <strong>{reportSettings.reportLanguage === 'fa' ? 'حداقل دما:' : 'Min Temp:'}</strong> {img.thermalData.minTemp.toFixed(1)}°C
+                      </p>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -239,23 +438,27 @@ export default function Reports() {
 
           {reportSettings.includeMarkers && markers.length > 0 && (
             <div className="section">
-              <h2>6. Temperature Markers</h2>
+              <h2>
+                {reportSettings.reportLanguage === 'fa' ? '۴. نشانگرهای دما' : '4. Temperature Markers'}
+              </h2>
               <table>
                 <thead>
                   <tr>
                     <th>#</th>
+                    <th>{reportSettings.reportLanguage === 'fa' ? 'برچسب' : 'Label'}</th>
                     <th>X</th>
                     <th>Y</th>
-                    <th>Temp (°F)</th>
+                    <th>{reportSettings.reportLanguage === 'fa' ? 'دما (°C)' : 'Temp (°C)'}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {markers.map((m, i) => (
-                    <tr key={i}>
+                    <tr key={m.id}>
                       <td>{i + 1}</td>
-                      <td>{m.x}</td>
-                      <td>{m.y}</td>
-                      <td>{m.temperature ?? '—'}</td>
+                      <td>{m.label}</td>
+                      <td>{m.x.toFixed(1)}</td>
+                      <td>{m.y.toFixed(1)}</td>
+                      <td>{m.temperature?.toFixed(1) || '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -265,25 +468,29 @@ export default function Reports() {
 
           {reportSettings.includeRegions && regions.length > 0 && (
             <div className="section">
-              <h2>7. Analysis Regions</h2>
+              <h2>
+                {reportSettings.reportLanguage === 'fa' ? '۵. نواحی تحلیل' : '5. Analysis Regions'}
+              </h2>
               <table>
                 <thead>
                   <tr>
                     <th>#</th>
-                    <th>Type</th>
-                    <th>Avg Temp</th>
-                    <th>Min Temp</th>
-                    <th>Max Temp</th>
+                    <th>{reportSettings.reportLanguage === 'fa' ? 'برچسب' : 'Label'}</th>
+                    <th>{reportSettings.reportLanguage === 'fa' ? 'نوع' : 'Type'}</th>
+                    <th>{reportSettings.reportLanguage === 'fa' ? 'میانگین' : 'Avg'}</th>
+                    <th>{reportSettings.reportLanguage === 'fa' ? 'حداقل' : 'Min'}</th>
+                    <th>{reportSettings.reportLanguage === 'fa' ? 'حداکثر' : 'Max'}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {regions.map((r, i) => (
-                    <tr key={i}>
+                    <tr key={r.id}>
                       <td>{i + 1}</td>
-                      <td>{r.type || '—'}</td>
-                      <td>{r.avgTemp ?? '—'} °F</td>
-                      <td>{r.minTemp ?? '—'} °F</td>
-                      <td>{r.maxTemp ?? '—'} °F</td>
+                      <td>{r.label}</td>
+                      <td>{r.type}</td>
+                      <td>{r.avgTemp?.toFixed(1) || '—'} °C</td>
+                      <td>{r.minTemp?.toFixed(1) || '—'} °C</td>
+                      <td>{r.maxTemp?.toFixed(1) || '—'} °C</td>
                     </tr>
                   ))}
                 </tbody>
@@ -293,22 +500,30 @@ export default function Reports() {
 
           {reportSettings.includeStatistics && (
             <div className="section">
-              <h2>8. Statistical Analysis</h2>
-              <p>—</p>
+              <h2>
+                {reportSettings.reportLanguage === 'fa' ? '۶. تحلیل آماری' : '6. Statistical Analysis'}
+              </h2>
+              <p>{reportSettings.reportLanguage === 'fa' ? 'تحلیل آماری بر اساس داده‌های جمع‌آوری شده' : 'Statistical analysis based on collected data'}</p>
             </div>
           )}
-
-          <div className="section">
-            <h2>9. Deviations from Test Standards</h2>
-            <p>—</p>
-          </div>
 
           {reportSettings.notes && (
             <div className="section">
-              <h2>10. Additional Notes</h2>
-              <p>{reportSettings.notes}</p>
+              <h2>
+                {reportSettings.reportLanguage === 'fa' ? '۷. یادداشت‌های اضافی' : '7. Additional Notes'}
+              </h2>
+              <p style={{ whiteSpace: 'pre-wrap' }}>{reportSettings.notes}</p>
             </div>
           )}
+
+          <div style={{ marginTop: '40px', paddingTop: '20px', borderTop: '1px solid #ccc', fontSize: '10px', color: '#666', textAlign: 'center' }}>
+            <p>
+              {reportSettings.reportLanguage === 'fa' 
+                ? `گزارش تولید شده توسط Thermal Analyzer Pro - ${new Date().toLocaleDateString('fa-IR')}`
+                : `Report generated by Thermal Analyzer Pro - ${new Date().toLocaleDateString('en-US')}`
+              }
+            </p>
+          </div>
         </div>
       </div>
     </Window>

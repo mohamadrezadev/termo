@@ -37,7 +37,7 @@ export const translations = {
     circle: "Circle",
     polygon: "Polygon",
     isotherm: "Isotherm",
-    distance: "Distance",
+    distanceTool: "Distance",
     angle: "Angle",
     
     // Image Controls
@@ -47,6 +47,7 @@ export const translations = {
     fitToWindow: "Fit to Window",
     actualSize: "Actual Size",
     fullscreen: "Fullscreen",
+    exitFullscreen: "Exit Fullscreen",
     
     // Color Palettes
     palette: "Palette",
@@ -97,11 +98,26 @@ export const translations = {
     dragDropHere: "Drag and drop files here",
     supportedFormats: "Supported formats: BMT, BMP, JPG, PNG, TIFF",
     
+    // Toast Messages
+    projectCreated: "Project created successfully",
+    projectSaved: "Project saved successfully",
+    projectLoaded: "Project loaded successfully",
+    projectDeleted: "Project deleted successfully",
+    imageUploaded: "Image uploaded successfully",
+    markerAdded: "Marker added successfully",
+    regionAdded: "Region added successfully",
+    windowsArranged: "Windows arranged automatically",
+    enterProjectName: "Please enter a project name",
+    noActiveProject: "No active project to save",
+    confirmDelete: "Are you sure you want to delete",
+    unsavedChangesWarning: "You have unsaved changes",
+    
     // Report Generation
     reportWizard: "Report Wizard",
     selectImages: "Select Images",
     selectMarkers: "Select Markers",
     reportSettings: "Report Settings",
+    reportLanguage: "Report Language",
     preview: "Preview",
     generate: "Generate",
     
@@ -113,7 +129,28 @@ export const translations = {
     save: "Save",
     load: "Load",
     reset: "Reset",
-    language: "Language"
+    language: "Language",
+
+    // Template Management
+    templates: "Templates",
+    saveTemplate: "Save Template",
+    loadTemplate: "Load Template",
+    manageTemplates: "Manage Templates",
+    templateName: "Template Name",
+    templateDescription: "Template Description",
+    createTemplate: "Create Template",
+    deleteTemplate: "Delete Template",
+    templateSaved: "Template saved successfully",
+    templateLoaded: "Template loaded successfully",
+    templateDeleted: "Template deleted successfully",
+    noTemplates: "No templates available",
+    myTemplates: "My Templates",
+    publicTemplates: "Public Templates",
+    makePublic: "Make Public",
+    makePrivate: "Make Private",
+    usageCount: "Times Used",
+    lastUpdated: "Last Updated",
+    applyTemplate: "Apply Template"
   },
   fa: {
     // App Navigation
@@ -153,7 +190,7 @@ export const translations = {
     circle: "دایره",
     polygon: "چندضلعی",
     isotherm: "ایزوترم",
-    distance: "فاصله",
+    distanceTool: "فاصله",
     angle: "زاویه",
     
     // Image Controls
@@ -163,6 +200,7 @@ export const translations = {
     fitToWindow: "تناسب با پنجره",
     actualSize: "اندازه واقعی",
     fullscreen: "تمام صفحه",
+    exitFullscreen: "خروج از تمام صفحه",
     
     // Color Palettes
     palette: "پالت رنگ",
@@ -213,11 +251,26 @@ export const translations = {
     dragDropHere: "فایل‌ها را اینجا رها کنید",
     supportedFormats: "فرمت‌های پشتیبانی شده: BMT, BMP, JPG, PNG, TIFF",
     
+    // Toast Messages
+    projectCreated: "پروژه با موفقیت ایجاد شد",
+    projectSaved: "پروژه با موفقیت ذخیره شد",
+    projectLoaded: "پروژه با موفقیت بارگذاری شد",
+    projectDeleted: "پروژه با موفقیت حذف شد",
+    imageUploaded: "تصویر با موفقیت بارگذاری شد",
+    markerAdded: "نشانگر با موفقیت اضافه شد",
+    regionAdded: "ناحیه با موفقیت اضافه شد",
+    windowsArranged: "پنجره‌ها به صورت خودکار چیده شدند",
+    enterProjectName: "لطفاً نام پروژه را وارد کنید",
+    noActiveProject: "هیچ پروژه فعالی برای ذخیره وجود ندارد",
+    confirmDelete: "آیا مطمئن هستید که می‌خواهید حذف کنید",
+    unsavedChangesWarning: "تغییرات ذخیره نشده دارید",
+    
     // Report Generation
     reportWizard: "جادوگر گزارش",
     selectImages: "انتخاب تصاویر",
     selectMarkers: "انتخاب نشانگرها",
     reportSettings: "تنظیمات گزارش",
+    reportLanguage: "زبان گزارش",
     preview: "پیش‌نمایش",
     generate: "تولید",
     
@@ -229,7 +282,28 @@ export const translations = {
     save: "ذخیره",
     load: "بارگذاری",
     reset: "بازنشانی",
-    language: "زبان"
+    language: "زبان",
+
+    // Template Management
+    templates: "قالب‌ها",
+    saveTemplate: "ذخیره قالب",
+    loadTemplate: "بارگذاری قالب",
+    manageTemplates: "مدیریت قالب‌ها",
+    templateName: "نام قالب",
+    templateDescription: "توضیحات قالب",
+    createTemplate: "ایجاد قالب",
+    deleteTemplate: "حذف قالب",
+    templateSaved: "قالب با موفقیت ذخیره شد",
+    templateLoaded: "قالب با موفقیت بارگذاری شد",
+    templateDeleted: "قالب با موفقیت حذف شد",
+    noTemplates: "قالبی موجود نیست",
+    myTemplates: "قالب‌های من",
+    publicTemplates: "قالب‌های عمومی",
+    makePublic: "عمومی کردن",
+    makePrivate: "خصوصی کردن",
+    usageCount: "تعداد استفاده",
+    lastUpdated: "آخرین بروزرسانی",
+    applyTemplate: "اعمال قالب"
   }
 };
 

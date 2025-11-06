@@ -14,7 +14,6 @@ import {
 import Window from './Window';
 // import ThermalImageRenderer from './ThermalImageRenderer'; // Import the new component
 import { Button } from '@/components/ui/button';
-import { useLayoutEffect } from 'react';
 import { 
   MousePointer, 
   MapPin, 
@@ -38,20 +37,20 @@ export default function ThermalViewer() {
     currentPalette,
     customMinTemp,
     customMaxTemp,
-    zoom,
-    panX,
-    panY,
+    thermalView,
     activeTool,
     markers,
     regions,
-    setZoom,
-    setPan,
+    setThermalZoom,
+    setThermalPan,
     setActiveTool,
     addImage,
     addMarker,
     addRegion,
     setActiveImage
   } = useAppStore();
+  
+  const { zoom, panX, panY } = thermalView;
 
   const t = translations[language];
   const mainCanvasRef = useRef<HTMLCanvasElement>(null); // Added this line
@@ -66,6 +65,62 @@ export default function ThermalViewer() {
 
   const activeImage = images.find(img => img.id === activeImageId);
   const palette = COLOR_PALETTES[currentPalette];
+
+//    برای رندر کردن تصویر حرارتی  
+
+  useEffect(() => {
+    const canvas = mainCanvasRef.current;
+    if (!canvas) {
+      return;
+    }
+
+    // اگر تصویر از سرور آمده، ولی پالت یا محدوده دما تغییر کرده، دوباره رندر کن
+    const shouldRerender = activeImage?.thermalData && palette && (
+      customMinTemp !== null || 
+      customMaxTemp !== null || 
+      currentPalette !== 'iron' // اگر پالت تغییر کرده
+    );
+
+    if (activeImage?.serverRenderedThermalUrl && !shouldRerender) {
+      // استفاده از تصویر از پیش رندر شده سرور
+      console.log('[THERMAL_VIEWER] Using server-rendered thermal image.');
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, img.width, img.height);
+        }
+      };
+      img.onerror = () => {
+        console.error('[THERMAL_VIEWER] Error loading server-provided thermal image.');
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+      };
+      img.src = activeImage.serverRenderedThermalUrl;
+    } else if (activeImage?.thermalData && palette) {
+      // رندر کلاینت‌ساید با پالت و محدوده دمای انتخابی
+      console.log('[THERMAL_VIEWER] Client-side rendering with palette:', currentPalette);
+      renderThermalCanvas(
+        canvas,
+        activeImage.thermalData,
+        palette,
+        customMinTemp ?? activeImage.thermalData.minTemp,
+        customMaxTemp ?? activeImage.thermalData.maxTemp
+      );
+    } else {
+      // پاک کردن canvas اگر هیچ داده‌ای نیست
+      console.log('[THERMAL_VIEWER] No thermal data to render, clearing canvas.');
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+    }
+  }, [activeImage, palette, customMinTemp, customMaxTemp, currentPalette]);
 
   // Effect for logging active image changes
   useEffect(() => {
@@ -130,18 +185,6 @@ export default function ThermalViewer() {
     }
   }, [activeImage, palette, customMinTemp, customMaxTemp]); // Dependencies: activeImage, palette, and temp overrides
 
-
-// ...
-const { updateWindow } = useAppStore();
-
-useLayoutEffect(() => {
-  if (activeImage?.thermalData) {
-    const { width, height } = activeImage.thermalData;
-    updateWindow('thermal-viewer', {
-      size: { width, height }
-    });
-  }
-}, [activeImage?.thermalData]);
   const handleFileUpload = useCallback(async (files: FileList) => {
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
@@ -263,7 +306,7 @@ useLayoutEffect(() => {
     if (isDragging && activeTool === 'cursor') {
       const deltaX = e.clientX - dragStart.x;
       const deltaY = e.clientY - dragStart.y;
-      setPan(panX + deltaX, panY + deltaY);
+      setThermalPan(panX + deltaX, panY + deltaY);
       setDragStart({ x: e.clientX, y: e.clientY });
       return; // Panning should not update mousePos for temperature or drawing
     }
@@ -290,7 +333,7 @@ useLayoutEffect(() => {
             });
         }
     }
-  }, [activeImage, zoom, panX, panY, isDragging, dragStart, activeTool, setPan, isDrawing, currentRegion, setCurrentRegion]); // Added setCurrentRegion to dependencies
+  }, [activeImage, zoom, panX, panY, isDragging, dragStart, activeTool, setThermalPan, isDrawing, currentRegion, setCurrentRegion]); // Added setCurrentRegion to dependencies
 
 
   // const handlePixelHoverFromRenderer = useCallback((imgX: number, imgY: number, temp: number | null) => {
@@ -576,11 +619,11 @@ useLayoutEffect(() => {
     }
   }, [activeTool, isDrawing, currentRegion, regions.length, addRegion, activeImage, calculateRegionTemperatures, calculatePolygonArea]);
 
-  const handleZoomIn = () => setZoom(Math.min(zoom * 1.2, 5));
-  const handleZoomOut = () => setZoom(Math.max(zoom / 1.2, 0.1));
+  const handleZoomIn = () => setThermalZoom(Math.min(zoom * 1.2, 5));
+  const handleZoomOut = () => setThermalZoom(Math.max(zoom / 1.2, 0.1));
   const handleResetView = () => {
-    setZoom(1);
-    setPan(0, 0);
+    setThermalZoom(1);
+    setThermalPan(0, 0);
   };
 
   const tools = [

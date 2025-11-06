@@ -66,7 +66,7 @@ To run the application in development mode, you'll need to start both the server
     - Ensure you are in the `server` directory and your virtual environment is activated.
     - Run the FastAPI server using Uvicorn:
       ```bash
-      uvicorn main:app --reload --port 8000
+      uvicorn main:app --reload --port 8080 
       ```
       The server will typically be available at `http://localhost:8000`.
 
