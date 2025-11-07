@@ -35,7 +35,7 @@ app.add_middleware(
 )
 
 @app.post("/api/extract-bmt")
-async def extract_bmt(request: Request, file: UploadFile = File(...)):
+async def extract_bmt(request: Request, file: UploadFile = File(...), palette: str = "iron"):
     if not file:
         raise HTTPException(status_code=400, detail="No file uploaded")
 
@@ -46,9 +46,9 @@ async def extract_bmt(request: Request, file: UploadFile = File(...)):
         with open(temp_path, "wb") as f:
             shutil.copyfileobj(file.file, f)
 
-        # اجرای اپ C# و خواندن خروجی JSON
+        # اجرای اپ C# با پارامتر پالت و خواندن خروجی JSON
         process = subprocess.run(
-            [CSHARP_APP, temp_path],
+            [CSHARP_APP, temp_path, palette],
             capture_output=True,
             text=True,
             encoding="utf-8"
@@ -65,15 +65,125 @@ async def extract_bmt(request: Request, file: UploadFile = File(...)):
         if "error" in result:
             raise HTTPException(status_code=500, detail=result["error"])
 
+        # Base URL برای ساخت URL کامل
+        base_url = str(request.base_url).rstrip('/')
+
         # مسیر عکس‌ها را برای ارسال به کلاینت آماده می‌کنیم
         for key in ["thermal", "visual"]:
             if result["images"].get(key):
                 src = result["images"][key]
+                if os.path.exists(src):
+                    dest = os.path.join(EXTRACT_DIR, os.path.basename(src))
+                    shutil.move(src, dest)
+                    result["images"][key] = f"{base_url}/static_images/{os.path.basename(src)}"
+                else:
+                    logger.warning(f"Image file not found: {src}")
+
+        # اضافه کردن CSV
+        if result.get("csv"):
+            csv_src = result["csv"]
+            if os.path.exists(csv_src):
+                csv_dest = os.path.join(EXTRACT_DIR, os.path.basename(csv_src))
+                shutil.move(csv_src, csv_dest)
+                result["csv_url"] = f"{base_url}/static_images/{os.path.basename(csv_src)}"
+                logger.info(f"CSV file moved and URL created: {result['csv_url']}")
+            else:
+                logger.warning(f"CSV file not found: {csv_src}")
+
+        # ساخت response با فرمت سازگار با کلاینت
+        response_data = {
+            "success": True,
+            "message": "BMT file processed successfully",
+            "images": []
+        }
+
+        # اضافه کردن thermal image
+        if result["images"].get("thermal"):
+            thermal_data = {
+                "type": "thermal",
+                "url": result["images"]["thermal"],
+                "csv_url": result.get("csv_url"),
+                "metadata": {
+                    "device": result.get("device"),
+                    "serial": result.get("serial"),
+                    "captured_at": result.get("captured_at"),
+                    "emissivity": result.get("emissivity", 0.95),
+                    "reflected_temp": result.get("reflected_temp", 20.0),
+                    "stats": result.get("stats", {})
+                }
+            }
+            response_data["images"].append(thermal_data)
+
+        # اضافه کردن visual/real image
+        if result["images"].get("visual"):
+            real_data = {
+                "type": "real",
+                "url": result["images"]["visual"]
+            }
+            response_data["images"].append(real_data)
+
+        logger.info(f"Response data prepared: {len(response_data['images'])} images")
+        return response_data
+
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+@app.post("/api/rerender-palette")
+async def rerender_palette(request: Request, bmt_file: UploadFile = File(...), palette: str = "iron"):
+    """
+    Re-render thermal image with a different color palette
+    بازسازی تصویر حرارتی با پالت رنگی متفاوت
+    """
+    if not bmt_file:
+        raise HTTPException(status_code=400, detail="No BMT file uploaded")
+
+    filename = f"{uuid.uuid4().hex}_{bmt_file.filename}"
+    temp_path = os.path.join(UPLOAD_DIR, filename)
+
+    try:
+        with open(temp_path, "wb") as f:
+            shutil.copyfileobj(bmt_file.file, f)
+
+        # اجرای برنامه C# با پالت جدید
+        process = subprocess.run(
+            [CSHARP_APP, temp_path, palette],
+            capture_output=True,
+            text=True,
+            encoding="utf-8"
+        )
+
+        output = process.stdout.strip()
+        logger.info(f"C# Re-render Output: {output}")
+
+        try:
+            result = json.loads(output)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=500, detail="Invalid JSON output from C# app")
+
+        if "error" in result:
+            raise HTTPException(status_code=500, detail=result["error"])
+
+        # Base URL
+        base_url = str(request.base_url).rstrip('/')
+
+        # فقط thermal image رو منتقل می‌کنیم
+        if result["images"].get("thermal"):
+            src = result["images"]["thermal"]
+            if os.path.exists(src):
                 dest = os.path.join(EXTRACT_DIR, os.path.basename(src))
                 shutil.move(src, dest)
-                result["images"][key] = f"/static_images/{os.path.basename(src)}"
+                thermal_url = f"{base_url}/static_images/{os.path.basename(src)}"
+            else:
+                raise HTTPException(status_code=500, detail="Thermal image not generated")
+        else:
+            raise HTTPException(status_code=500, detail="No thermal image in result")
 
-        return {"success": True, "data": result}
+        return {
+            "success": True,
+            "thermal_url": thermal_url,
+            "palette": palette
+        }
 
     finally:
         if os.path.exists(temp_path):
@@ -87,7 +197,9 @@ async def serve_image(filename: str):
     return FileResponse(file_path)
 
 
-
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8080)
 
 
 # import sys
@@ -494,6 +606,3 @@ async def serve_image(filename: str):
 # #         except Exception as e:
 # #             logger.warning(f"Failed to cleanup temp file: {e}")
 
-# # if __name__ == "__main__":
-# #     import uvicorn
-# #     uvicorn.run(app, host="127.0.0.1", port=8080)

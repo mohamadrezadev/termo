@@ -153,6 +153,7 @@ export interface Marker {
   temperature: number;
   label: string;
   emissivity: number;
+  imageId: string;
 }
 
 export interface Region {
@@ -165,6 +166,7 @@ export interface Region {
   area?: number;
   label: string;
   emissivity: number;
+  imageId: string;
 }
 
 export interface ColorPalette {
@@ -223,7 +225,91 @@ export function renderThermalCanvas(
   ctx.putImageData(imageData, 0, 0);
 }
 
+/**
+ * پردازش داده‌های حرارتی از فایل CSV
+ * این تابع دقت بیشتری نسبت به خواندن از پیکسل‌های تصویر دارد
+ */
+export async function processThermalDataFromCSV(
+  csvUrl: string,
+  metadata?: Partial<ThermalMetadata>
+): Promise<ThermalData> {
+  console.log('[THERMAL_UTILS] Processing thermal data from CSV:', csvUrl);
+
+  const response = await fetch(csvUrl, {
+    mode: 'cors',
+    credentials: 'omit'
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch CSV: ${response.status} ${response.statusText}`);
+  }
+
+  const csvText = await response.text();
+  console.log(`[THERMAL_UTILS] CSV loaded, size: ${(csvText.length / 1024).toFixed(2)} KB`);
+
+  // Parse CSV
+  const rows = csvText.trim().split('\n');
+  const temperatureMatrix: number[][] = rows.map(row =>
+    row.split(',').map(val => parseFloat(val.trim()))
+  );
+
+  const height = temperatureMatrix.length;
+  const width = temperatureMatrix[0]?.length || 0;
+
+  if (width === 0 || height === 0) {
+    throw new Error('Invalid CSV: empty temperature matrix');
+  }
+
+  console.log(`[THERMAL_UTILS] CSV parsed: ${width}x${height} pixels`);
+
+  // محاسبه min/max temperature
+  let minTemp = Infinity;
+  let maxTemp = -Infinity;
+
+  temperatureMatrix.forEach(row => {
+    row.forEach(temp => {
+      if (!isNaN(temp)) {
+        minTemp = Math.min(minTemp, temp);
+        maxTemp = Math.max(maxTemp, temp);
+      }
+    });
+  });
+
+  if (minTemp === Infinity) {
+    minTemp = 0;
+    maxTemp = 0;
+  }
+
+  console.log(`[THERMAL_UTILS] Temperature range: ${minTemp.toFixed(2)}°C - ${maxTemp.toFixed(2)}°C`);
+
+  // ساخت metadata کامل
+  const fullMetadata: ThermalMetadata = {
+    emissivity: metadata?.emissivity ?? 0.95,
+    ambientTemp: metadata?.ambientTemp ?? 20,
+    reflectedTemp: metadata?.reflectedTemp ?? 20,
+    humidity: metadata?.humidity ?? 0.5,
+    distance: metadata?.distance ?? 1.0,
+    cameraModel: metadata?.cameraModel || 'Thermal Camera',
+    timestamp: metadata?.timestamp || new Date()
+  };
+
+  return {
+    width,
+    height,
+    temperatureMatrix,
+    minTemp,
+    maxTemp,
+    metadata: fullMetadata
+  };
+}
+
+/**
+ * پردازش تصویر حرارتی از BMP سرور (fallback اگر CSV نباشد)
+ * دقت این متد کمتر از CSV است
+ */
 export async function processThermalBmpFromServer(imageUrl: string): Promise<ThermalData> {
+  console.log('[THERMAL_UTILS] Processing thermal BMP from server (fallback mode):', imageUrl);
+
   // For desktop app, ensure we can fetch from local server
   const response = await fetch(imageUrl, {
     mode: 'cors',
@@ -273,6 +359,8 @@ export async function processThermalBmpFromServer(imageUrl: string): Promise<The
       minTemp = 0;
       maxTemp = 0;
     }
+
+    console.log('[THERMAL_UTILS] BMP processed (fallback)');
 
     return {
       width: img.width,

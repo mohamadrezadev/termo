@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, useState, useCallback, useEffect as useReactEffect } from 'react'; // Added useEffect again for clarity, though it's already there. Will ensure only one import.
+import { useRef, useEffect, useState, useCallback } from 'react';
 import { useAppStore } from '@/lib/store';
 import { translations } from '@/lib/translations';
 import {
@@ -8,6 +8,7 @@ import {
   COLOR_PALETTES,
   ThermalData, // Added for prop typing
   processThermalBmpFromServer,
+  processThermalDataFromCSV, // New import for CSV processing
   ThermalImage, // For constructing the new image object
   renderThermalCanvas // Ensure this is imported
 } from '@/lib/thermal-utils';
@@ -44,6 +45,7 @@ export default function ThermalViewer() {
     setThermalZoom,
     setThermalPan,
     setActiveTool,
+    setPalette,
     addImage,
     addMarker,
     addRegion,
@@ -194,11 +196,13 @@ export default function ThermalViewer() {
       formData.append('file', file);
 
       // Use dynamic server URL for desktop app
-      const serverUrl = process.env.NODE_ENV === 'development' 
-        ? 'http://localhost:8080' 
+      const serverUrl = process.env.NODE_ENV === 'development'
+        ? 'http://localhost:8080'
         : 'http://127.0.0.1:8080';
-      
-      const res = await fetch(`${serverUrl}/api/extract-bmps-py`, {
+
+      console.log(`[UPLOAD] Uploading file to: ${serverUrl}/api/extract-bmt`);
+
+      const res = await fetch(`${serverUrl}/api/extract-bmt`, {
         method: 'POST',
         body: formData,
         mode: 'cors',
@@ -219,8 +223,9 @@ export default function ThermalViewer() {
       }
 
       const result = await res.json();
+      console.log('[UPLOAD] Server response:', result);
 
-      if (!result.success) { // Assuming server sends { success: false, message: "..." }
+      if (!result.success) {
         throw new Error(result.message || 'Server processing failed');
       }
 
@@ -230,16 +235,48 @@ export default function ThermalViewer() {
       // Proceed if either a thermal or a real image URL is found
       if (thermalResult?.url || realResult?.url) {
         let thermalData: ThermalData | null = null;
-        if (thermalResult?.url) {
+
+        // استفاده از CSV برای دقت بالاتر
+        if (thermalResult?.csv_url) {
           try {
-            console.log(`[UPLOAD] Processing thermal image from URL: ${thermalResult.url}`);
+            console.log(`[UPLOAD] Processing thermal data from CSV: ${thermalResult.csv_url}`);
+
+            // ساخت metadata از اطلاعات سرور
+            const metadata = {
+              emissivity: thermalResult.metadata?.emissivity ?? 0.95,
+              ambientTemp: thermalResult.metadata?.reflected_temp ?? 20,
+              reflectedTemp: thermalResult.metadata?.reflected_temp ?? 20,
+              humidity: 0.5,
+              distance: 1.0,
+              cameraModel: thermalResult.metadata?.device || 'Thermal Camera',
+              timestamp: thermalResult.metadata?.captured_at
+                ? new Date(thermalResult.metadata.captured_at)
+                : new Date()
+            };
+
+            thermalData = await processThermalDataFromCSV(thermalResult.csv_url, metadata);
+            console.log('[UPLOAD] Thermal data processed from CSV successfully');
+          } catch (csvErr) {
+            console.error(`[UPLOAD] Failed to process CSV, falling back to BMP:`, csvErr);
+            // Fallback به BMP
+            if (thermalResult?.url) {
+              try {
+                thermalData = await processThermalBmpFromServer(thermalResult.url);
+              } catch (bmpErr) {
+                console.error(`[UPLOAD] BMP fallback also failed:`, bmpErr);
+              }
+            }
+          }
+        } else if (thermalResult?.url) {
+          // اگر CSV نیست، از BMP استفاده کن
+          try {
+            console.log(`[UPLOAD] Processing thermal image from BMP: ${thermalResult.url}`);
             thermalData = await processThermalBmpFromServer(thermalResult.url);
           } catch (thermalErr) {
-            console.error(`[UPLOAD] Failed to process thermal image from ${thermalResult.url}:`, thermalErr);
-            // thermalData remains null, which is acceptable
+            console.error(`[UPLOAD] Failed to process thermal BMP:`, thermalErr);
           }
         } else {
-          console.log('[UPLOAD] No thermal image URL found in server response.');
+          console.log('[UPLOAD] No thermal data source found (neither CSV nor BMP).');
         }
 
         const realImageUrl = realResult?.url ?? null;
@@ -253,29 +290,33 @@ export default function ThermalViewer() {
         const newImage: ThermalImage = {
           id: newImageId,
           name: file.name,
-          thermalData: thermalData, // Can be null if thermal processing failed or no URL
-          realImage: realImageUrl,   // Can be null if no real image URL
-          serverRenderedThermalUrl: thermalResult?.url ?? null, // New line
+          thermalData: thermalData,
+          realImage: realImageUrl,
+          serverRenderedThermalUrl: thermalResult?.url ?? null,
         };
 
-        console.log('[UPLOAD] Adding new image to store:', newImage);
+        console.log('[UPLOAD] Adding new image to store:', {
+          id: newImage.id,
+          name: newImage.name,
+          hasThermalData: !!newImage.thermalData,
+          hasRealImage: !!newImage.realImage,
+          thermalDataSource: thermalResult?.csv_url ? 'CSV' : 'BMP'
+        });
+
         addImage(newImage);
-        setActiveImage(newImage.id); // Set as active even if some parts are missing
+        setActiveImage(newImage.id);
 
       } else {
-        // Neither thermal nor real image URL was found in the server response
         console.warn('[UPLOAD] Server response did not contain thermal or real image URLs for file:', file.name, result);
-        // Optionally, inform the user here if desired, e.g., using a toast notification
-        // For now, just logging to console.
         throw new Error('Server did not return valid image URLs.');
       }
-    } catch (err: any) { // Explicitly type err
+    } catch (err: any) {
       console.error('[UPLOAD] File upload or processing failed for file:', file.name, err);
-      // Here you might want to show an error to the user, e.g., using a toast notification system
-      // For example: toast.error(`Upload failed for ${file.name}: ${err.message}`);
+      // TODO: Show error toast to user
+      alert(`Upload failed for ${file.name}: ${err.message}`);
     }
   }
-}, [addImage, setActiveImage, generateId, processThermalBmpFromServer]); // Added generateId and processThermalBmpFromServer to dependencies
+}, [addImage, setActiveImage]);
  
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -521,7 +562,7 @@ export default function ThermalViewer() {
   const handleContainerMouseUp = useCallback(() => {
     setIsDragging(false);
 
-    if (activeTool === 'rectangle' && isDrawing && currentRegion && currentRegion.points.length === 2) {
+    if (activeTool === 'rectangle' && isDrawing && currentRegion && currentRegion.points.length === 2 && activeImage) {
       // Validate points to ensure width/height > 0 before finalizing
       if (currentRegion.points[0].x === currentRegion.points[1].x || currentRegion.points[0].y === currentRegion.points[1].y) {
           setIsDrawing(false);
@@ -535,20 +576,21 @@ export default function ThermalViewer() {
         minTemp: 0,
         maxTemp: 0,
         avgTemp: 0,
+        area: 0,
         label: `Rectangle ${regions.length + 1}`,
         emissivity: 0.95,
         imageId: activeImage.id // Associate region with the active image
       };
-      
+
       // Calculate temperature statistics for the region
-      if (activeImage?.thermalData) {
+      if (activeImage.thermalData) {
         const temps = calculateRegionTemperatures(activeImage.thermalData, currentRegion.points, 'rectangle');
         region.minTemp = temps.min;
         region.maxTemp = temps.max;
         region.avgTemp = temps.avg;
         region.area = calculateRectangleArea(currentRegion.points);
       }
-      
+
       addRegion(region);
       setIsDrawing(false);
       setCurrentRegion(null);
@@ -558,7 +600,7 @@ export default function ThermalViewer() {
   }, [activeTool, activeImage, regions, addRegion, isDrawing, currentRegion, calculateRegionTemperatures, calculateRectangleArea]);
 
   const handleContainerDoubleClick = useCallback(() => {
-    if (activeTool === 'polygon' && isDrawing && currentRegion && currentRegion.points.length >= 3) {
+    if (activeTool === 'polygon' && isDrawing && currentRegion && currentRegion.points.length >= 3 && activeImage) {
       // Validate points before finalizing. For polygons, the last point is a temporary "rubber-band" point from mouse move.
       // The actual click that adds a persistent point is handleMainCanvasClick.
       // Double click finalizes, so we might have one extra point from the move before double click.
@@ -599,20 +641,21 @@ export default function ThermalViewer() {
         minTemp: 0,
         maxTemp: 0,
         avgTemp: 0,
+        area: 0,
         label: `Polygon ${regions.length + 1}`,
         emissivity: 0.95,
         imageId: activeImage.id // Associate region with the active image
       };
-      
+
       // Calculate temperature statistics for the region
-      if (activeImage?.thermalData) {
+      if (activeImage.thermalData) {
         const temps = calculateRegionTemperatures(activeImage.thermalData, currentRegion.points, 'polygon');
         region.minTemp = temps.min;
         region.maxTemp = temps.max;
         region.avgTemp = temps.avg;
         region.area = calculatePolygonArea(currentRegion.points);
       }
-      
+
       addRegion(region);
       setIsDrawing(false);
       setCurrentRegion(null);
@@ -656,7 +699,27 @@ export default function ThermalViewer() {
             ))}
           </div>
 
-          <div className="flex items-center space-x-1">
+          <div className="flex items-center space-x-2">
+            {/* Color Palette Selector */}
+            {activeImage?.thermalData && (
+              <div className="flex items-center space-x-1 px-2 border-r border-gray-600">
+                <Thermometer className="w-3 h-3 text-gray-400" />
+                <select
+                  value={currentPalette}
+                  onChange={(e) => setPalette(e.target.value)}
+                  className="text-xs bg-gray-700 text-gray-300 border border-gray-600 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  title="Color Palette"
+                >
+                  {Object.entries(COLOR_PALETTES).map(([key, palette]) => (
+                    <option key={key} value={key}>
+                      {palette.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Zoom Controls */}
             <Button
               variant="ghost"
               size="sm"
@@ -744,18 +807,92 @@ export default function ThermalViewer() {
                 className="absolute top-0 left-0 pointer-events-none"
               />
               
-              {/* Temperature Tooltip - uses mousePos (image coordinates) scaled and panned */}
+              {/* Enhanced Temperature Tooltip - shows detailed CSV data */}
               {currentTemp !== null && mousePos.x > 0 && mousePos.y > 0 && ( // also check mousePos is valid
                 <div
-                  className="absolute bg-black/80 text-white text-xs px-2 py-1 rounded pointer-events-none z-10"
+                  className="absolute bg-black/95 text-white text-xs px-3 py-2 rounded-lg pointer-events-none z-10 shadow-xl border border-gray-500"
                   style={{
                     // Position based on image coordinates (mousePos) then apply container's transform
-                    left: mousePos.x + 10 / zoom, // Adjust offset based on zoom for consistent appearance
-                    top: mousePos.y - 30 / zoom,
+                    left: mousePos.x + 15 / zoom, // Adjust offset based on zoom for consistent appearance
+                    top: mousePos.y - 100 / zoom,
+                    minWidth: '220px',
+                    backdropFilter: 'blur(4px)',
                     // The parent div is scaled, so tooltip is positioned relative to unscaled image, then scaled with parent
                   }}
                 >
-                  {currentTemp.toFixed(1)}°C
+                  <div className="space-y-1">
+                    <div className="font-bold text-yellow-400 border-b border-gray-600 pb-1 mb-1 flex items-center justify-between">
+                      <span>{t.thermalData || 'Thermal Data'}</span>
+                      <span className="text-[9px] text-gray-400 font-normal">
+                        {activeImage?.thermalData ? 'CSV' : 'BMP'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                      <span className="text-gray-300">Position:</span>
+                      <span className="font-mono text-xs">({Math.round(mousePos.x)}, {Math.round(mousePos.y)})</span>
+
+                      <span className="text-gray-300 font-semibold">{t.temperature || 'Temp'}:</span>
+                      <span className="font-mono text-yellow-300 font-bold">{currentTemp.toFixed(2)}°C</span>
+
+                      {activeImage?.thermalData?.metadata && (
+                        <>
+                          <span className="col-span-2 h-px bg-gray-700 my-0.5"></span>
+
+                          <span className="text-gray-300">{t.emissivity || 'Emissivity'}:</span>
+                          <span className="font-mono">{activeImage.thermalData.metadata.emissivity.toFixed(3)}</span>
+
+                          {activeImage.thermalData.metadata.ambientTemp !== undefined && (
+                            <>
+                              <span className="text-gray-300">{t.ambientTemp || 'Ambient'}:</span>
+                              <span className="font-mono">{activeImage.thermalData.metadata.ambientTemp.toFixed(1)}°C</span>
+                            </>
+                          )}
+
+                          {activeImage.thermalData.metadata.reflectedTemp !== undefined && (
+                            <>
+                              <span className="text-gray-300">Reflected:</span>
+                              <span className="font-mono">{activeImage.thermalData.metadata.reflectedTemp.toFixed(1)}°C</span>
+                            </>
+                          )}
+
+                          {activeImage.thermalData.metadata.humidity !== undefined && (
+                            <>
+                              <span className="text-gray-300">{t.humidity || 'Humidity'}:</span>
+                              <span className="font-mono">{(activeImage.thermalData.metadata.humidity * 100).toFixed(0)}%</span>
+                            </>
+                          )}
+
+                          {activeImage.thermalData.metadata.distance !== undefined && (
+                            <>
+                              <span className="text-gray-300">{t.distance || 'Distance'}:</span>
+                              <span className="font-mono">{activeImage.thermalData.metadata.distance.toFixed(1)}m</span>
+                            </>
+                          )}
+                        </>
+                      )}
+
+                      {/* Temperature Range */}
+                      {activeImage?.thermalData && (
+                        <>
+                          <span className="col-span-2 h-px bg-gray-700 my-0.5"></span>
+                          <span className="text-gray-300">Min/Max:</span>
+                          <span className="font-mono text-xs">
+                            {activeImage.thermalData.minTemp.toFixed(1)}°C / {activeImage.thermalData.maxTemp.toFixed(1)}°C
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    {activeImage?.thermalData?.metadata?.cameraModel && (
+                      <div className="text-gray-400 text-[10px] mt-1 pt-1 border-t border-gray-700 flex items-center justify-between">
+                        <span>{activeImage.thermalData.metadata.cameraModel}</span>
+                        {activeImage.thermalData.metadata.timestamp && (
+                          <span className="text-gray-500">
+                            {new Date(activeImage.thermalData.metadata.timestamp).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

@@ -60,6 +60,7 @@ export const translations = {
     
     // Temperature & Measurements
     temperature: "Temperature",
+    thermalData: "Thermal Data",
     emissivity: "Emissivity",
     ambientTemp: "Ambient Temperature",
     reflectedTemp: "Reflected Temperature",
@@ -213,6 +214,7 @@ export const translations = {
     
     // Temperature & Measurements
     temperature: "دما",
+    thermalData: "داده‌های حرارتی",
     emissivity: "گسیل‌پذیری",
     ambientTemp: "دمای محیط",
     reflectedTemp: "دمای بازتابی",

@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\MSBuild\\Current\\Bin\\MSBuild.exe\":*)",
+      "Bash(powershell -Command \"& ''C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\MSBuild\\Current\\Bin\\MSBuild.exe'' BmtExtract.csproj /p:Configuration=Debug /t:Rebuild\")",
+      "Bash(where:*)",
+      "Bash(powershell -Command \"Get-Command msbuild -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source\")",
+      "Bash(cmd /c \"msbuild BmtExtract.csproj /p:Configuration=Debug /t:Rebuild\")",
+      "Bash(powershell -Command \"& { $vsPath = & ''C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe'' -latest -property installationPath; Import-Module (Join-Path $vsPath ''Common7\\Tools\\Microsoft.VisualStudio.DevShell.dll''); Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation; Set-Location ''d:\\پروژه های دانش بنیان\\termo2\\termo\\server\\ConsoleApp1\\ConsoleApp1''; msbuild BmtExtract.csproj /p:Configuration=Debug /t:Rebuild }\")",
+      "Bash(test:*)",
+      "Bash(python:*)",
+      "Bash(python -c:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
