@@ -327,204 +327,159 @@ export default function Reports() {
 
         {/* Hidden Report Template */}
         <div
-          ref={reportRef}
-          style={{
-            position: 'absolute',
-            left: '-9999px',
-            top: 0,
-            width: '210mm',
-            padding: '20mm',
-            background: 'white',
-            fontFamily: reportSettings.reportLanguage === 'fa' ? 'Tahoma, Arial, sans-serif' : 'Arial, sans-serif',
-            fontSize: '12px',
-            lineHeight: '1.6',
-            color: '#000',
-            direction: reportSettings.reportLanguage === 'fa' ? 'rtl' : 'ltr',
-            textAlign: reportSettings.reportLanguage === 'fa' ? 'right' : 'left'
-          }}
-        >
-          <h1>{reportSettings.title}</h1>
+  ref={reportRef}
+  style={{
+    position: 'absolute',
+    left: '-9999px',
+    top: 0,
+    width: '210mm',
+    minHeight: '297mm',
+    padding: '15mm',
+    background: 'white',
+    fontFamily: reportSettings.reportLanguage === 'fa' ? 'Tahoma' : 'Arial Narrow, Arial, sans-serif',
+    fontSize: '11px',
+    color: '#000',
+    direction: reportSettings.reportLanguage === 'fa' ? 'rtl' : 'ltr',
+    textAlign: reportSettings.reportLanguage === 'fa' ? 'right' : 'left'
+  }}
+>
+  {/* Header */}
+  <div style={{
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottom: '2px solid #000',
+    paddingBottom: '8px',
+    marginBottom: '12px'
+  }}>
+    <h2 style={{ fontWeight: 'bold', fontSize: '16px' }}>{reportSettings.title}</h2>
+    <div style={{ fontSize: '10px' }}>
+      <p>{reportSettings.reportLanguage === 'fa' ? 'گزارش حرارتی' : 'Thermal Analysis Report'}</p>
+      <p>{new Date().toLocaleDateString(reportSettings.reportLanguage === 'fa' ? 'fa-IR' : 'en-US')}</p>
+    </div>
+  </div>
 
-          <div className="section">
-            <h2>
-              {reportSettings.reportLanguage === 'fa' ? '۱. اطلاعات پروژه' : '1. Project Information'}
-            </h2>
-            <p><strong>{reportSettings.reportLanguage === 'fa' ? 'نام پروژه:' : 'Project Name:'}</strong> {currentProject?.name || '—'}</p>
-            <p><strong>{reportSettings.reportLanguage === 'fa' ? 'اپراتور:' : 'Operator:'}</strong> {currentProject?.operator || '—'}</p>
-            <p><strong>{reportSettings.reportLanguage === 'fa' ? 'شرکت:' : 'Company:'}</strong> {currentProject?.company || '—'}</p>
-            <p><strong>{reportSettings.reportLanguage === 'fa' ? 'تاریخ:' : 'Date:'}</strong> {currentProject?.date ? new Date(currentProject.date).toLocaleDateString(reportSettings.reportLanguage === 'fa' ? 'fa-IR' : 'en-US') : '—'}</p>
-            {currentProject?.notes && (
-              <p><strong>{reportSettings.reportLanguage === 'fa' ? 'یادداشت‌ها:' : 'Notes:'}</strong> {currentProject.notes}</p>
-            )}
-          </div>
+  {/* Section 1: Project Info */}
+  <h3 style={{ borderBottom: '1px solid #000', marginBottom: '5px', fontSize: '13px' }}>
+    {reportSettings.reportLanguage === 'fa' ? '۱. اطلاعات پروژه' : '1. Project Information'}
+  </h3>
+  <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '12px' }}>
+    <tbody>
+      <tr>
+        <td><strong>{reportSettings.reportLanguage === 'fa' ? 'نام پروژه:' : 'Project Name:'}</strong></td>
+        <td>{currentProject?.name || '—'}</td>
+        <td><strong>{reportSettings.reportLanguage === 'fa' ? 'اپراتور:' : 'Operator:'}</strong></td>
+        <td>{currentProject?.operator || '—'}</td>
+      </tr>
+      <tr>
+        <td><strong>{reportSettings.reportLanguage === 'fa' ? 'شرکت:' : 'Company:'}</strong></td>
+        <td>{currentProject?.company || '—'}</td>
+        <td><strong>{reportSettings.reportLanguage === 'fa' ? 'تاریخ:' : 'Date:'}</strong></td>
+        <td>{currentProject?.date ? new Date(currentProject.date).toLocaleDateString(reportSettings.reportLanguage === 'fa' ? 'fa-IR' : 'en-US') : '—'}</td>
+      </tr>
+    </tbody>
+  </table>
 
-          {reportSettings.includeParameters && (
-            <div className="section">
-              <h2>
-                {reportSettings.reportLanguage === 'fa' ? '۲. پارامترهای اندازه‌گیری' : '2. Measurement Parameters'}
-              </h2>
-              <p><strong>{reportSettings.reportLanguage === 'fa' ? 'گسیل‌پذیری:' : 'Emissivity:'}</strong> 0.95</p>
-              <p><strong>{reportSettings.reportLanguage === 'fa' ? 'دمای محیط:' : 'Ambient Temperature:'}</strong> 20°C</p>
-              <p><strong>{reportSettings.reportLanguage === 'fa' ? 'دمای بازتابی:' : 'Reflected Temperature:'}</strong> 20°C</p>
-              <p><strong>{reportSettings.reportLanguage === 'fa' ? 'رطوبت:' : 'Humidity:'}</strong> 50%</p>
-              <p><strong>{reportSettings.reportLanguage === 'fa' ? 'فاصله:' : 'Distance:'}</strong> 1.0m</p>
-            </div>
+  {/* Section 2: Measurement Parameters */}
+  {reportSettings.includeParameters && (
+    <>
+      <h3 style={{ borderBottom: '1px solid #000', marginBottom: '5px', fontSize: '13px' }}>
+        {reportSettings.reportLanguage === 'fa' ? '۲. پارامترهای اندازه‌گیری' : '2. Measurement Parameters'}
+      </h3>
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '12px' }}>
+        <tbody>
+          <tr><td>Emissivity:</td><td>0.95</td><td>Reflected Temp:</td><td>20°C</td></tr>
+          <tr><td>Ambient Temp:</td><td>20°C</td><td>Humidity:</td><td>50%</td></tr>
+          <tr><td>Distance:</td><td>1.0m</td><td></td><td></td></tr>
+        </tbody>
+      </table>
+    </>
+  )}
+
+  {/* Section 3: Images */}
+  {reportSettings.includeImages && images.length > 0 && (
+    <>
+      <h3 style={{ borderBottom: '1px solid #000', marginBottom: '5px', fontSize: '13px', pageBreakBefore: 'always' }}>
+        {reportSettings.reportLanguage === 'fa' ? '۳. تصاویر حرارتی' : '3. Thermal Images'}
+      </h3>
+
+      {images.map((img, idx) => (
+        <div key={img.id} style={{ marginBottom: '20px' }}>
+          <strong>{reportSettings.reportLanguage === 'fa' ? `تصویر ${idx + 1}:` : `Image ${idx + 1}:`} {img.name}</strong>
+          {imagesBase64[img.id] && (
+            <img src={imagesBase64[img.id]} alt={img.name} style={{ width: '100%', border: '1px solid #999', marginTop: '5px' }} />
           )}
-
-          {reportSettings.includeImages && images.length > 0 && (
-            <div className="section" style={{ pageBreakBefore: 'always' }}>
-              <h2>
-                {reportSettings.reportLanguage === 'fa' ? '۳. تصاویر' : '3. Images'}
-              </h2>
-              {images.map((img, index) => (
-                <div key={img.id} style={{ marginBottom: '20px', pageBreakInside: 'avoid' }}>
-                  <h3 style={{ fontSize: '14px', marginBottom: '10px' }}>
-                    {reportSettings.reportLanguage === 'fa' ? `تصویر ${index + 1}: ` : `Image ${index + 1}: `}
-                    {img.name}
-                  </h3>
-                  
-                  {/* Real Image */}
-                  {imagesBase64[img.id] && (
-                    <div style={{ marginBottom: '10px' }}>
-                      <p style={{ fontSize: '11px', color: '#666', marginBottom: '5px' }}>
-                        {reportSettings.reportLanguage === 'fa' ? 'تصویر واقعی:' : 'Real Image:'}
-                      </p>
-                      <img 
-                        src={imagesBase64[img.id]} 
-                        alt={`${img.name} - Real`}
-                        style={{ 
-                          maxWidth: '100%', 
-                          height: 'auto',
-                          border: '1px solid #ccc',
-                          borderRadius: '4px'
-                        }}
-                      />
-                    </div>
-                  )}
-                  
-                  {/* Thermal Image */}
-                  {(imagesBase64[`${img.id}_thermal`] || imagesBase64[`${img.id}_server`]) && (
-                    <div style={{ marginBottom: '10px' }}>
-                      <p style={{ fontSize: '11px', color: '#666', marginBottom: '5px' }}>
-                        {reportSettings.reportLanguage === 'fa' ? 'تصویر حرارتی:' : 'Thermal Image:'}
-                      </p>
-                      <img 
-                        src={imagesBase64[`${img.id}_thermal`] || imagesBase64[`${img.id}_server`]} 
-                        alt={`${img.name} - Thermal`}
-                        style={{ 
-                          maxWidth: '100%', 
-                          height: 'auto',
-                          border: '1px solid #ccc',
-                          borderRadius: '4px'
-                        }}
-                      />
-                    </div>
-                  )}
-                  
-                  {/* Temperature Info */}
-                  {img.thermalData && (
-                    <div style={{ fontSize: '11px', marginTop: '5px' }}>
-                      <p>
-                        <strong>{reportSettings.reportLanguage === 'fa' ? 'حداکثر دما:' : 'Max Temp:'}</strong> {img.thermalData.maxTemp.toFixed(1)}°C
-                        {' | '}
-                        <strong>{reportSettings.reportLanguage === 'fa' ? 'حداقل دما:' : 'Min Temp:'}</strong> {img.thermalData.minTemp.toFixed(1)}°C
-                      </p>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+          {(imagesBase64[`${img.id}_thermal`] || imagesBase64[`${img.id}_server`]) && (
+            <img src={imagesBase64[`${img.id}_thermal`] || imagesBase64[`${img.id}_server`]} alt={`${img.name}-thermal`} style={{ width: '100%', border: '1px solid #999', marginTop: '5px' }} />
           )}
-
-          {reportSettings.includeMarkers && markers.length > 0 && (
-            <div className="section">
-              <h2>
-                {reportSettings.reportLanguage === 'fa' ? '۴. نشانگرهای دما' : '4. Temperature Markers'}
-              </h2>
-              <table>
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>{reportSettings.reportLanguage === 'fa' ? 'برچسب' : 'Label'}</th>
-                    <th>X</th>
-                    <th>Y</th>
-                    <th>{reportSettings.reportLanguage === 'fa' ? 'دما (°C)' : 'Temp (°C)'}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {markers.map((m, i) => (
-                    <tr key={m.id}>
-                      <td>{i + 1}</td>
-                      <td>{m.label}</td>
-                      <td>{m.x.toFixed(1)}</td>
-                      <td>{m.y.toFixed(1)}</td>
-                      <td>{m.temperature?.toFixed(1) || '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {reportSettings.includeRegions && regions.length > 0 && (
-            <div className="section">
-              <h2>
-                {reportSettings.reportLanguage === 'fa' ? '۵. نواحی تحلیل' : '5. Analysis Regions'}
-              </h2>
-              <table>
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>{reportSettings.reportLanguage === 'fa' ? 'برچسب' : 'Label'}</th>
-                    <th>{reportSettings.reportLanguage === 'fa' ? 'نوع' : 'Type'}</th>
-                    <th>{reportSettings.reportLanguage === 'fa' ? 'میانگین' : 'Avg'}</th>
-                    <th>{reportSettings.reportLanguage === 'fa' ? 'حداقل' : 'Min'}</th>
-                    <th>{reportSettings.reportLanguage === 'fa' ? 'حداکثر' : 'Max'}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {regions.map((r, i) => (
-                    <tr key={r.id}>
-                      <td>{i + 1}</td>
-                      <td>{r.label}</td>
-                      <td>{r.type}</td>
-                      <td>{r.avgTemp?.toFixed(1) || '—'} °C</td>
-                      <td>{r.minTemp?.toFixed(1) || '—'} °C</td>
-                      <td>{r.maxTemp?.toFixed(1) || '—'} °C</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {reportSettings.includeStatistics && (
-            <div className="section">
-              <h2>
-                {reportSettings.reportLanguage === 'fa' ? '۶. تحلیل آماری' : '6. Statistical Analysis'}
-              </h2>
-              <p>{reportSettings.reportLanguage === 'fa' ? 'تحلیل آماری بر اساس داده‌های جمع‌آوری شده' : 'Statistical analysis based on collected data'}</p>
-            </div>
-          )}
-
-          {reportSettings.notes && (
-            <div className="section">
-              <h2>
-                {reportSettings.reportLanguage === 'fa' ? '۷. یادداشت‌های اضافی' : '7. Additional Notes'}
-              </h2>
-              <p style={{ whiteSpace: 'pre-wrap' }}>{reportSettings.notes}</p>
-            </div>
-          )}
-
-          <div style={{ marginTop: '40px', paddingTop: '20px', borderTop: '1px solid #ccc', fontSize: '10px', color: '#666', textAlign: 'center' }}>
-            <p>
-              {reportSettings.reportLanguage === 'fa' 
-                ? `گزارش تولید شده توسط Thermal Analyzer Pro - ${new Date().toLocaleDateString('fa-IR')}`
-                : `Report generated by Thermal Analyzer Pro - ${new Date().toLocaleDateString('en-US')}`
-              }
+          {img.thermalData && (
+            <p style={{ fontSize: '10px', marginTop: '4px' }}>
+              {reportSettings.reportLanguage === 'fa'
+                ? `حداکثر: ${img.thermalData.maxTemp.toFixed(1)}°C | حداقل: ${img.thermalData.minTemp.toFixed(1)}°C`
+                : `Max: ${img.thermalData.maxTemp.toFixed(1)}°C | Min: ${img.thermalData.minTemp.toFixed(1)}°C`}
             </p>
-          </div>
+          )}
         </div>
+      ))}
+    </>
+  )}
+
+  {/* Section 4: Markers */}
+  {reportSettings.includeMarkers && markers.length > 0 && (
+    <>
+      <h3 style={{ borderBottom: '1px solid #000', marginBottom: '5px', fontSize: '13px' }}>
+        {reportSettings.reportLanguage === 'fa' ? '۴. نقاط دما' : '4. Temperature Markers'}
+      </h3>
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '12px' }}>
+        <thead>
+          <tr style={{ background: '#eee' }}>
+            <th>#</th>
+            <th>{reportSettings.reportLanguage === 'fa' ? 'برچسب' : 'Label'}</th>
+            <th>X</th>
+            <th>Y</th>
+            <th>{reportSettings.reportLanguage === 'fa' ? 'دما (°C)' : 'Temp (°C)'}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {markers.map((m, i) => (
+            <tr key={m.id}>
+              <td>{i + 1}</td>
+              <td>{m.label}</td>
+              <td>{m.x.toFixed(1)}</td>
+              <td>{m.y.toFixed(1)}</td>
+              <td>{m.temperature?.toFixed(1) || '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  )}
+
+  {/* Notes */}
+  {reportSettings.notes && (
+    <>
+      <h3 style={{ borderBottom: '1px solid #000', marginBottom: '5px', fontSize: '13px' }}>
+        {reportSettings.reportLanguage === 'fa' ? 'یادداشت‌ها' : 'Notes'}
+      </h3>
+      <p style={{ whiteSpace: 'pre-wrap', marginBottom: '10px' }}>{reportSettings.notes}</p>
+    </>
+  )}
+
+  {/* Footer */}
+  <div style={{
+    position: 'absolute',
+    bottom: '15mm',
+    width: '100%',
+    textAlign: 'center',
+    fontSize: '9px',
+    color: '#777'
+  }}>
+    {reportSettings.reportLanguage === 'fa'
+      ? 'گزارش تولید شده توسط Directhub Thermal Analyzer'
+      : 'Report generated by Directhub Thermal Analyzer'}
+  </div>
+</div>
+
       </div>
     </Window>
   );
