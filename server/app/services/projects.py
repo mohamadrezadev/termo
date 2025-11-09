@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Body, HTTPException
 from uuid import uuid4
 from sqlmodel import Session
-from app.db.database import init_db, get_session
+from server.app.db.session import init_db, get_session
 from app.db.models import Project
 from app.core.file_utils import ensure_project_dirs
 from fastapi import Depends

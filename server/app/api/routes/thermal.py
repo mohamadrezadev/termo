@@ -1,68 +1,114 @@
-# app/api/routes/thermal.py
-from fastapi import APIRouter, Body, HTTPException
-import subprocess
-import json
+from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, status
+from sqlmodel import Session
+from typing import List, Optional
+from uuid import UUID
+import shutil
 import os
-import tempfile
+
+from app.api.deps import get_db
+from app.models.image import ThermalImage
+from app.schemas.image import ImageUploadResponse
+from app.services.thermal_processor import ThermalProcessor
+from app.services.file_manager import FileManager
+from app.core.config import settings
 
 router = APIRouter()
 
-CSHARP_APP = r"D:\پروژه های دانش بنیان\termo2\termo\BmtExtract\BmtExtract\bin\Debug\net8.0\BmtExtract.exe"
-
-def process_bmt_file(bmt_path: str) -> dict:
+@router.post("/extract-bmt", response_model=ImageUploadResponse)
+async def extract_bmt_file(
+    file: UploadFile = File(...),
+    project_id: Optional[str] = Form(None),
+    db: Session = Depends(get_db)
+):
     """
-    Runs the C# BMT extractor and returns parsed JSON.
+    Extract thermal and real images from BMT file
+    Returns URLs for both thermal and real images, plus CSV data
     """
-    if not os.path.exists(bmt_path):
-        raise FileNotFoundError(f"BMT file not found: {bmt_path}")
-
-    output_dir = tempfile.mkdtemp()
-
-    result = subprocess.run(
-        [CSHARP_APP, bmt_path, output_dir],
-        capture_output=True,
-        text=True
-    )
-
-    if result.returncode != 0:
-        raise RuntimeError(f"Extractor error: {result.stderr}")
-
-    json_path = os.path.join(output_dir, "data.json")
-    if not os.path.exists(json_path):
-        raise RuntimeError("Extractor did not produce data.json")
-
-    with open(json_path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-@router.post("/process")
-def process(payload: dict = Body(...)):
-    """
-    FastAPI endpoint to process a BMT file.
-    Expects JSON payload with:
-        - project_id: str
-        - path: str (file path to BMT)
-        - palette: str (optional)
-        - use_fahrenheit: bool (optional)
-    """
-    project_id = payload.get("project_id")
-    file_path = payload.get("path")
-    palette = payload.get("palette", "iron")
-    use_fahrenheit = payload.get("use_fahrenheit", False)
-
-    if not project_id or not file_path:
-        raise HTTPException(status_code=400, detail="project_id and path are required")
-
+    file_manager = FileManager()
+    thermal_processor = ThermalProcessor()
+    
     try:
-        # Call the subprocess wrapper
-        data = process_bmt_file(file_path)
-
-        # You can optionally apply palette or convert temperature here
-        # For example:
-        data["palette"] = palette
-        data["use_fahrenheit"] = use_fahrenheit
-
-        return {"project_id": project_id, "data": data}
-
+        # Save uploaded file temporarily
+        temp_file_path = file_manager.save_temp_file(file)
+        
+        # Process BMT file
+        result = await thermal_processor.process_bmt_file(temp_file_path)
+        
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=result.get("message", "Failed to process BMT file")
+            )
+        
+        # Save extracted images if project_id provided
+        images_data = []
+        if project_id:
+            project_uuid = UUID(project_id)
+            
+            # Save thermal image
+            if result.get("thermal_image_path"):
+                thermal_url = file_manager.save_project_file(
+                    project_id,
+                    result["thermal_image_path"],
+                    "thermal",
+                    file.filename
+                )
+                images_data.append({
+                    "type": "thermal",
+                    "url": thermal_url,
+                    "csv_url": result.get("csv_url"),
+                    "metadata": result.get("metadata", {})
+                })
+            
+            # Save real image
+            if result.get("real_image_path"):
+                real_url = file_manager.save_project_file(
+                    project_id,
+                    result["real_image_path"],
+                    "real",
+                    file.filename
+                )
+                images_data.append({
+                    "type": "real",
+                    "url": real_url
+                })
+            
+            # Create database record
+            thermal_image = ThermalImage(
+                project_id=project_uuid,
+                name=file.filename,
+                thermal_image_path=thermal_url if result.get("thermal_image_path") else None,
+                real_image_path=real_url if result.get("real_image_path") else None,
+                thermal_data=result.get("thermal_data")
+            )
+            db.add(thermal_image)
+            db.commit()
+        else:
+            # No project - just return URLs
+            if result.get("thermal_image_path"):
+                images_data.append({
+                    "type": "thermal",
+                    "url": f"/api/v1/files/temp/{os.path.basename(result['thermal_image_path'])}",
+                    "csv_url": result.get("csv_url"),
+                    "metadata": result.get("metadata", {})
+                })
+            if result.get("real_image_path"):
+                images_data.append({
+                    "type": "real",
+                    "url": f"/api/v1/files/temp/{os.path.basename(result['real_image_path'])}"
+                })
+        
+        # Cleanup temp file
+        os.remove(temp_file_path)
+        
+        return ImageUploadResponse(
+            success=True,
+            images=images_data,
+            message="BMT file processed successfully"
+        )
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error processing BMT file: {str(e)}"
+        )
