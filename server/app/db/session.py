@@ -8,10 +8,13 @@ engine = create_engine(
 )
 
 # Dependency to get a database session
-def get_db() -> Session:
+def get_db() -> Session: # type: ignore
     """
     Provides a database session for FastAPI dependencies.
     The session is closed after the request is finished.
     """
+    with Session(engine) as session:
+        yield session
+def get_session():
     with Session(engine) as session:
         yield session

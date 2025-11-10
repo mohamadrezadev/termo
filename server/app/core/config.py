@@ -1,51 +1,46 @@
-# server/app/core/config.py
-from pydantic_settings import BaseSettings
+import os
 from pathlib import Path
 from typing import Optional
-
+from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    """Application configuration settings"""
-    
-    # Application Info
-    PROJECT_NAME: str = "Thermal Analyzer"
+    # Application
+    APP_NAME: str = "Thermal Analyzer Backend"
     VERSION: str = "1.0.0"
-    DEBUG: bool = False
-    
-    # Paths
-    BASE_DIR: Path = Path(__file__).resolve().parent.parent
-    PROJECTS_DIR: Path = BASE_DIR / "data" / "projects"
+    API_V1_STR: str = "/api"
     
     # Database
-    DATABASE_URL: str = "sqlite:///./thermal_analyzer.db"
+    DATABASE_URL: str = "sqlite:///./data/app.db"
     
-    # API Settings
-    API_V1_PREFIX: str = "/api/v1"
+    # Directories
+    BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent
+    DATA_DIR: Path = BASE_DIR / "data"
+    PROJECTS_DIR: Path = DATA_DIR / "projects"
+    TEMP_DIR: Path = DATA_DIR / "temp"
+    FONTS_DIR: Path = BASE_DIR / "app" / "assets" / "fonts"
     
-    # File Upload
-    MAX_UPLOAD_SIZE: int = 100 * 1024 * 1024  # 100 MB
-    ALLOWED_EXTENSIONS: list = [".bmt", ".bmp", ".jpg", ".jpeg", ".png", ".tiff", ".tif"]
-    
-    # Thermal Processing
-    BMT_EXTRACTOR_PATH: Optional[str] = None  # Path to C# BmtExtract.exe
-    TEMP_FILE_CLEANUP_HOURS: int = 24
+    # C# Extractor
+    CSHARP_EXTRACTOR_PATH: str = os.getenv(
+        "CSHARP_EXTRACTOR_PATH",
+        r"D:\پروژه های دانش بنیان\termo2\termo\BmtExtract\BmtExtract\bin\Debug\net8.0\BmtExtract.exe"
+    )
     
     # CORS
-    CORS_ORIGINS: list = ["http://localhost:3000", "http://localhost:5000"]
+    BACKEND_CORS_ORIGINS: list = ["*"]
     
-    # Server
-    HOST: str = "127.0.0.1"
-    PORT: int = 8080
+    # File Upload
+    MAX_UPLOAD_SIZE: int = 100 * 1024 * 1024  # 100MB
     
     class Config:
+        case_sensitive = True
         env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Create directories
+        self.DATA_DIR.mkdir(exist_ok=True)
+        self.PROJECTS_DIR.mkdir(exist_ok=True)
+        self.TEMP_DIR.mkdir(exist_ok=True)
+        self.FONTS_DIR.mkdir(parents=True, exist_ok=True)
 
-# Create global settings instance
 settings = Settings()
-
-
-# Ensure required directories exist
-settings.PROJECTS_DIR.mkdir(parents=True, exist_ok=True)

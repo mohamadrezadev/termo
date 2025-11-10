@@ -3,9 +3,9 @@ from typing import Optional, List
 from datetime import datetime
 from uuid import UUID
 
-from server.app.schemas.image import ImageResponse
-from server.app.schemas.marker import MarkerResponse
-from server.app.schemas.region import RegionResponse
+from app.schemas.image import ImageResponse
+from app.schemas.marker import MarkerResponse
+from app.schemas.region import RegionResponse
 
 class ProjectBase(BaseModel):
     name: str

@@ -3,9 +3,10 @@ from sqlmodel import Session, select
 from typing import List
 from uuid import UUID
 
-from app.api.deps import get_db
+
 from app.models.marker import Marker
 from app.schemas.marker import MarkerCreate, MarkerUpdate, MarkerResponse
+from app.api.deps import get_db
 
 router = APIRouter()
 

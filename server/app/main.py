@@ -5,7 +5,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.params import Depends
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session
-from app.api.routes import project, thermal, markers, regions
 from app.db import init_db
 from app.models.project import Project
 from app.db.session import get_db

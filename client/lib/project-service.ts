@@ -138,7 +138,7 @@ export async function loadAllProjects(): Promise<ProjectResponse[]> {
   }
 }
 
-export asexport function loadProjectFromStorage(projectId: string): {
+export export function loadProjectFromStorage(projectId: string): {
   project: Project;
   images: ThermalImage[];
   markers: Marker[];
