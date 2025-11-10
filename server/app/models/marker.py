@@ -1,5 +1,5 @@
 from sqlmodel import SQLModel, Field, Relationship
-from typing import Optional, Literal
+from typing import Optional
 from datetime import datetime
 from uuid import uuid4, UUID
 
@@ -14,7 +14,7 @@ class Marker(SQLModel, table=True):
     project_id: UUID = Field(foreign_key="projects.id", index=True)
     image_id: UUID = Field(foreign_key="thermal_images.id", index=True)
     
-    type: Literal["point", "hotspot", "coldspot"] = "point"
+    type: str = Field(default="point") # Changed from Literal to str to fix SQLModel issubclass error
     x: float
     y: float
     temperature: float
