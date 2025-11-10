@@ -68,6 +68,30 @@ export async function deleteProject(projectId: string): Promise<void> {
 
 // --- Other API Calls (Thermal, Markers, Regions) will be added as needed ---
 
+export async function uploadFiles(projectId: string, thermalFile: File, visualFile: File): Promise<{ thermal_path: string, visual_path: string }> {
+  const formData = new FormData();
+  formData.append('thermal', thermalFile);
+  formData.append('visual', visualFile);
+
+  const response = await fetch(`${API_BASE_URL}/upload/${projectId}`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+    const errorMessage = errorData.detail || `File upload failed with status ${response.status}`;
+    toast.error(errorMessage);
+    throw new Error(errorMessage);
+  }
+
+  return response.json();
+}
+
+export async function checkHealth(): Promise<{ status: string, service: string }> {
+  return apiFetch<{ status: string, service: string }>('/health/status');
+}
+
 // Placeholder for types based on backend analysis
 export interface ProjectResponse {
   id: string;
