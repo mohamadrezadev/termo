@@ -3,9 +3,9 @@ from typing import Optional, List
 from datetime import datetime
 from uuid import uuid4, UUID
 
-from app.models.image import ThermalImage
-from app.models.marker import Marker
-from app.models.region import Region
+# from models.image import ThermalImage
+# from models.marker import Marker
+# from models.region import Region
 
 class Project(SQLModel, table=True):
     __tablename__ = "projects"

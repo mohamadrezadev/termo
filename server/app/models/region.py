@@ -4,8 +4,8 @@ from datetime import datetime
 from uuid import uuid4, UUID
 
 
-from server.app.models.image import ThermalImage
-from server.app.models.project import Project
+# from server.app.models.image import ThermalImage
+# from server.app.models.project import Project
 
 class RegionPoint(SQLModel):
     x: float
@@ -32,6 +32,6 @@ class Region(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     # Relationships
-    project: "Project" = Relationship(back_populates="regions")
-    image: "ThermalImage" = Relationship(back_populates="regions")
+    # project: "Project" = Relationship(back_populates="regions")
+    # image: "ThermalImage" = Relationship(back_populates="regions")
     

@@ -4,8 +4,8 @@ from datetime import datetime
 from uuid import uuid4, UUID
 
 
-from app.models.image import ThermalImage
-from app.models.project import Project
+# # from app.models.image import ThermalImage
+# from app.models.project import Project
 
 class Marker(SQLModel, table=True):
     __tablename__ = "markers"
