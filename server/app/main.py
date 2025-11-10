@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import project, thermal, markers, regions
 from app.db import init_db
 from app.models.project import Project
-from app.db import session
+from app.db.session import get_db
 
 app = FastAPI(title="Thermal Inspection Backend (SQLite + PDF template)")
 
@@ -28,8 +28,8 @@ app.add_middleware(
   # ensure tables exist
 
 @app.get("/projects")
-def read_projects(session: Session = Depends(session.get_session)):
-    projects = session.exec(select(Project)).all()
+def read_projects(db: Session = Depends(get_db)):
+    projects = db.exec(select(Project)).all()
     return projects
 
 api_router = APIRouter()

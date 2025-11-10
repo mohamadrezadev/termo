@@ -3,7 +3,7 @@ from sqlmodel import Session, select
 from typing import List
 from uuid import UUID
 
-from app.api.deps import get_db
+from app.db.session import get_db
 
 from app.models.project import Project
 from app.services.file_manager import FileManager

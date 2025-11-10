@@ -8,11 +8,11 @@ engine = create_engine(
     future=True
 )
 
-# Session factory
-def SessionLocal() -> Session:
+# Dependency to get a database session
+def get_db() -> Session:
     """
-    Returns a new SQLModel session bound to the engine.
-    Used in FastAPI dependencies:
-        db: Session = Depends(get_db)
+    Provides a database session for FastAPI dependencies.
+    The session is closed after the request is finished.
     """
-    return Session(engine)
+    with Session(engine) as session:
+        yield session
