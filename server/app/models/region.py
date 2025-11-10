@@ -4,8 +4,8 @@ from datetime import datetime
 from uuid import uuid4, UUID
 
 
-from server.app.models.image import ThermalImage
-from server.app.models.project import Project
+# from server.app.models.image import ThermalImage
+# from server.app.models.project import Project
 
 class RegionPoint(SQLModel):
     x: float
