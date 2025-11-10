@@ -3,6 +3,10 @@ from typing import Optional, List
 from datetime import datetime
 from uuid import uuid4, UUID
 
+from app.models.image import ThermalImage
+from app.models.marker import Marker
+from app.models.region import Region
+
 # from models.image import ThermalImage
 # from models.marker import Marker
 # from models.region import Region
@@ -21,6 +25,6 @@ class Project(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
     # Relationships
-    images: List["ThermalImage"] = Relationship(back_populates="project")
-    markers: List["Marker"] = Relationship(back_populates="project")
-    regions: List["Region"] = Relationship(back_populates="project")
+    images: List["ThermalImage"] = Relationship(back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+    markers: List["Marker"] = Relationship(back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+    regions: List["Region"] = Relationship(back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"})

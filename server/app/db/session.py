@@ -7,6 +7,11 @@ engine = create_engine(
     connect_args={"check_same_thread": False}  # Needed for SQLite
 )
 
-def get_session():
+# Dependency to get a database session
+def get_db() -> Session:
+    """
+    Provides a database session for FastAPI dependencies.
+    The session is closed after the request is finished.
+    """
     with Session(engine) as session:
         yield session

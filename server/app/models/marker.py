@@ -24,5 +24,5 @@ class Marker(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     # Relationships
-    project: "Project" = Relationship(back_populates="markers")
-    image: "ThermalImage" = Relationship(back_populates="markers")
+    # project: "Project" = Relationship(back_populates="markers")
+    # image: "ThermalImage" = Relationship(back_populates="markers")

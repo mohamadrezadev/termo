@@ -4,7 +4,9 @@ from datetime import datetime
 from uuid import uuid4, UUID
 
 # # from models.marker import Marker
-from models.project import Project
+from app.models.project import Project
+from app.models.marker import Marker
+from app.models.region import Region
 # # from models.region import Region
 
 class ThermalMetadata(SQLModel):
@@ -46,5 +48,5 @@ class ThermalImage(SQLModel, table=True):
     
     # Relationships
     project: "Project" = Relationship(back_populates="images")
-    # markers: List["Marker"] = Relationship(back_populates="image")
-    # regions: List["Region"] = Relationship(back_populates="image")
+    markers: List["Marker"] = Relationship(back_populates="image", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+    regions: List["Region"] = Relationship(back_populates="image", sa_relationship_kwargs={"cascade": "all, delete-orphan"})

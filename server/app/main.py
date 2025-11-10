@@ -1,7 +1,14 @@
+from select import select
 from fastapi import FastAPI
+from fastapi.concurrency import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.params import Depends
 from fastapi.staticfiles import StaticFiles
-from contextlib import asynccontextmanager
+from sqlmodel import Session
+from app.api.routes import project, thermal, markers, regions
+from app.db import init_db
+from app.models.project import Project
+from app.db.session import get_db
 
 from app.core.config import settings
 from app.db.init_db import init_db
@@ -49,5 +56,9 @@ def root():
 def health_check():
     return {"status": "healthy"}
 
+@app.get("/projects")
+def read_projects(db: Session = Depends(get_db)):
+    projects = db.exec(select(Project)).all()
+    return projects
 
 
