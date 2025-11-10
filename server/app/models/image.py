@@ -3,9 +3,9 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 from uuid import uuid4, UUID
 
-from app.models.marker import Marker
-from app.models.project import Project
-from app.models.region import Region
+# from models.marker import Marker
+from  models.project import Project
+# from models.region import Region
 
 class ThermalMetadata(SQLModel):
     """Metadata for thermal image"""
@@ -46,5 +46,5 @@ class ThermalImage(SQLModel, table=True):
     
     # Relationships
     project: "Project" = Relationship(back_populates="images")
-    markers: List["Marker"] = Relationship(back_populates="image")
-    regions: List["Region"] = Relationship(back_populates="image")
+    # markers: List["Marker"] = Relationship(back_populates="image")
+    # regions: List["Region"] = Relationship(back_populates="image")
