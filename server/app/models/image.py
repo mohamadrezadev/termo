@@ -46,5 +46,5 @@ class ThermalImage(SQLModel, table=True):
     
     # Relationships
     project: "Project" = Relationship(back_populates="images")
-    markers: List["Marker"] = Relationship(back_populates="image")
-    regions: List["Region"] = Relationship(back_populates="image")
+    markers: List["Marker"] = Relationship(back_populates="image", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+    regions: List["Region"] = Relationship(back_populates="image", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
