@@ -1,9 +1,15 @@
-import os
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PROJECTS_DIR = os.path.join(BASE_DIR, "..", "..", "data", "projects")
-FONTS_DIR = os.path.join(BASE_DIR, "assets", "fonts")
-DB_FILE = os.path.join(BASE_DIR, "..", "..", "data", "app.db")
+from pydantic_settings import BaseSettings
+from pathlib import Path
 
-os.makedirs(PROJECTS_DIR, exist_ok=True)
-os.makedirs(FONTS_DIR, exist_ok=True)
-os.makedirs(os.path.dirname(DB_FILE), exist_ok=True)
+class Settings(BaseSettings):
+    PROJECT_NAME: str = "Thermal Analyzer"
+    BASE_DIR: Path = Path(__file__).resolve().parent.parent
+    PROJECTS_DIR: Path = BASE_DIR / "projects"
+
+    DATABASE_URL: str = "sqlite:///./app.db"
+
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+
+settings = Settings()
