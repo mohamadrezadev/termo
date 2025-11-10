@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import uuid4, UUID
 
 # # from models.marker import Marker
-from models.project import Project
+# from models.project import Project
 # # from models.region import Region
 
 class ThermalMetadata(SQLModel):
