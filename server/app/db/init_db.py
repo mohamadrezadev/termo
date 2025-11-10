@@ -1,14 +1,20 @@
+# server/app/db/init_db.py
 from sqlmodel import SQLModel
+
 from app.db.session import engine
-from app.models import project, image, marker, region, template
+# Import all models to register them with SQLModel
+from app.models import Project, ThermalImage, Marker, Region, Template
 
 
 def init_db() -> None:
     """
-    Initializes the database by creating all tables.
-    Should be called once at startup.
+    Initialize database by creating all tables.
+    Should be called once at application startup.
     """
     print("🗄️  Initializing database...")
-    SQLModel.metadata.create_all(bind=engine)
-    print("✅ Database initialized successfully.")
-
+    try:
+        SQLModel.metadata.create_all(bind=engine)
+        print("✅ Database tables created successfully")
+    except Exception as e:
+        print(f"❌ Error creating database tables: {e}")
+        raise

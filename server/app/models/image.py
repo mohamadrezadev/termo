@@ -3,9 +3,9 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 from uuid import uuid4, UUID
 
-from models.marker import Marker
-from models.project import Project
-from models.region import Region
+from app.models.marker import Marker
+from app.models.project import Project
+from app.models.region import Region
 
 class ThermalMetadata(SQLModel):
     """Metadata for thermal image"""

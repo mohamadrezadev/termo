@@ -2,7 +2,7 @@ import os
 from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import FileResponse
 from uuid import uuid4
-from app.services.report_service import ReportService
+from server.app.services.report_generator import ReportService
 from app.db.models import ReportRecord
 from server.app.db.session import get_session
 
