@@ -1,43 +1,63 @@
-from fastapi import APIRouter
-
-from fastapi import FastAPI,Depends
-from sqlalchemy import select
-from sqlmodel import Session
-
+from select import select
+from fastapi import FastAPI
+from fastapi.concurrency import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import project, thermal, markers, regions
+from fastapi.params import Depends
+from fastapi.staticfiles import StaticFiles
+from sqlmodel import Session
 from app.db import init_db
 from app.models.project import Project
-from app.db import session
+from app.db.session import get_db
 
-app = FastAPI(title="Thermal Inspection Backend (SQLite + PDF template)")
+from app.core.config import settings
+from app.db.init_db import init_db
+from app.api.v1.router import api_router
 
-@app.on_event("startup")
-def on_startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
     init_db()
-    
+    yield
+    # Shutdown
+    pass
+
+app = FastAPI(
+    title=settings.APP_NAME,
+    version=settings.VERSION,
+    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    lifespan=lifespan
+)
+
+# CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.BACKEND_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Mount static files
+app.mount("/files", StaticFiles(directory=str(settings.PROJECTS_DIR)), name="files")
 
-  # ensure tables exist
+# Include API router
+app.include_router(api_router, prefix=settings.API_V1_STR)
+
+@app.get("/")
+def root():
+    return {
+        "app": settings.APP_NAME,
+        "version": settings.VERSION,
+        "status": "running"
+    }
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy"}
 
 @app.get("/projects")
-def read_projects(session: Session = Depends(session.get_session)):
-    projects = session.exec(select(Project)).all()
+def read_projects(db: Session = Depends(get_db)):
+    projects = db.exec(select(Project)).all()
     return projects
 
-api_router = APIRouter()
-api_router.include_router(project.router, prefix="/project", tags=["project"])
-# api_router.include_router(upload.router, prefix="/upload", tags=["upload"])
-api_router.include_router(thermal.router, prefix="/thermal", tags=["thermal"])
-api_router.include_router(markers.router, prefix="/markers", tags=["markers"])
-# api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
-app.include_router(api_router)
 
-# app.include_router(health.router, prefix="/health", tags=["health"])

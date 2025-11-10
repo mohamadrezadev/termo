@@ -1,9 +1,22 @@
 // lib/project-service.ts
 import { Project } from './store';
+import { 
+  fetchProjects, 
+  fetchProjectById, 
+  createProject, 
+  updateProject, 
+  deleteProject,
+  ProjectResponse,
+  ProjectDetailResponse,
+  ProjectCreate,
+  ProjectUpdate
+} from './api-service';
+import { toast } from 'sonner';
+import { v4 as uuidv4 } from 'uuid';
 import { ThermalImage, Marker, Region } from './thermal-utils';
 
-const PROJECTS_STORAGE_KEY = 'thermal_analyzer_projects';
-const CURRENT_PROJECT_KEY = 'thermal_analyzer_current_project';
+// const PROJECTS_STORAGE_KEY = 'thermal_analyzer_projects';
+// const CURRENT_PROJECT_KEY = 'thermal_analyzer_current_project';
 
 export interface SerializedProject {
   id: string;
@@ -113,11 +126,137 @@ function canvasToBase64(canvas: HTMLCanvasElement): string {
   }
 }
 
+// --- API-based Project Management Functions ---
+
+export async function loadAllProjects(): Promise<ProjectResponse[]> {
+  try {
+    return await fetchProjects();
+  } catch (error) {
+    console.error('Failed to load projects from API:', error);
+    // Fallback to local storage if API fails, or just return empty array
+    return [];
+  }
+}
+
+export export function loadProjectFromStorage(projectId: string): {
+  project: Project;
+  images: ThermalImage[];
+  markers: Marker[];
+  regions: Region[];
+} | null {  try {
+    const apiProject = await fetchProjectById(projectId);
+    return deserializeProjectFromApi(apiProject);
+  } catch (error) {
+    console.error(`Failed to load project ${projectId} from API:`, error);
+    return null;
+  }
+}
+
+export async function saveProject(
+  project: Project,
+  images: ThermalImage[],
+  markers: Marker[],
+  regions: Region[]
+): Promise<{ success: boolean; error?: string; project?: ProjectResponse }> {
+  try {
+    const projectData = await serializeProjectForApi(project, images, markers, regions);
+    let apiProject: ProjectResponse;
+
+    if (project.id) {
+      // Update existing project
+      apiProject = await updateProject(project.id, projectData as ProjectUpdate);
+      toast.success('Project updated successfully');
+    } else {
+      // Create new project
+      // Note: API should handle ID generation, but we pass one for consistency if needed
+      const newProjectData = { ...projectData as ProjectCreate, id: uuidv4() }; 
+      apiProject = await createProject(newProjectData);
+      toast.success('Project created successfully');
+    }
+
+    return { success: true, project: apiProject };
+  } catch (error) {
+    console.error('Failed to save project to API:', error);
+    return { success: false, error: (error as Error).message };
+  }
+}
+
+export async function deleteProjectFromBackend(projectId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    await deleteProject(projectId);
+    toast.success('Project deleted successfully');
+    return { success: true };
+  } catch (error) {
+    console.error(`Failed to delete project ${projectId} from API:`, error);
+    return { success: false, error: (error as Error).message };
+  }
+}
+
+// Deserialization from API response to client store format
+export function deserializeProjectFromApi(
+  apiProject: ProjectResponse | ProjectDetailResponse
+): {
+  project: Project;
+  images: ThermalImage[];
+  markers: Marker[];
+  regions: Region[];
+} {
+  // This is a placeholder. The actual implementation depends on the API response structure.
+  // Assuming the API response is a flat project object for now.
+  
+  const project: Project = {
+    id: apiProject.id,
+    name: apiProject.name,
+    operator: apiProject.operator,
+    company: apiProject.company,
+    date: new Date(apiProject.date),
+    notes: apiProject.notes,
+    images: [], // Images will be fetched/managed separately
+    hasUnsavedChanges: false
+  };
+  
+  // For ProjectDetailResponse, we would extract images, markers, regions here.
+  // Since we don't have the full schema, we'll leave them empty for now.
+  const images: ThermalImage[] = [];
+  const markers: Marker[] = [];
+  const regions: Region[] = [];
+
+  return {
+    project,
+    images,
+    markers,
+    regions
+  };
+}
+
+export async function serializeProjectForApi(
+  project: Project,
+  images: ThermalImage[],
+  markers: Marker[],
+  regions: Region[]
+): Promise<ProjectCreate | ProjectUpdate> {
+  // This is a placeholder. The actual implementation depends on what the API expects.
+  // Assuming the API expects only project metadata for creation/update.
+  // Image, marker, and region handling will require separate API calls.
+  
+  const projectData = {
+    name: project.name,
+    operator: project.operator,
+    company: project.company,
+    date: project.date.toISOString(),
+    notes: project.notes,
+  };
+
+  return projectData;
+}
+
+// --- Old Local Storage Functions (Commented out) ---
+
+/*
 // سریالایز کردن پروژه برای ذخیره
 export async function serializeProject(
   project: Project,
   images: ThermalImage[],
-  markers: Marker[],
   regions: Region[]
 ): Promise<SerializedProject> {
   console.log('[PROJECT_SERVICE] Starting serialization...');
@@ -442,9 +581,7 @@ export function getCurrentProjectId(): string | null {
 
 // ذخیره خودکار
 let autoSaveTimeout: NodeJS.Timeout | null = null;
-
-export function scheduleAutoSave(
-  project: Project,
+export function scheduleAutoSave(store: any) {Project,
   images: ThermalImage[],
   markers: Marker[],
   regions: Region[],

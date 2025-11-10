@@ -3,7 +3,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 from uuid import UUID
 
-from server.app.schemas.common import ThermalMetadataDTO
+from app.schemas.common import ThermalMetadataDTO
 
 class ThermalDataDTO(BaseModel):
     width: int

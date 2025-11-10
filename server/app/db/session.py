@@ -1,18 +1,20 @@
 from sqlmodel import Session, create_engine
-from core.config import settings
+from app.core.config import settings
 
-# Create database engine
 engine = create_engine(
     settings.DATABASE_URL,
-    echo=False,  # Set True for debug SQL logs
-    future=True
+    echo=True,
+    connect_args={"check_same_thread": False}  # Needed for SQLite
 )
 
-# Session factory
-def SessionLocal() -> Session:
+# Dependency to get a database session
+def get_db() -> Session: # type: ignore
     """
-    Returns a new SQLModel session bound to the engine.
-    Used in FastAPI dependencies:
-        db: Session = Depends(get_db)
+    Provides a database session for FastAPI dependencies.
+    The session is closed after the request is finished.
     """
-    return Session(engine)
+    with Session(engine) as session:
+        yield session
+def get_session():
+    with Session(engine) as session:
+        yield session

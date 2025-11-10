@@ -1,8 +1,9 @@
 from typing import Generator
 
-from db.session import SessionLocal
-from core.config import settings
+# from app.db.session import SessionLocal
+from app.core.config import settings
 
+from app.db.session import get_session as get_db
 
 # Dependency: get database session
 def get_db() -> Generator:
@@ -11,7 +12,7 @@ def get_db() -> Generator:
     Usage: 
         db: Session = Depends(get_db)
     """
-    db = SessionLocal()
+    db = get_db()
     try:
         yield db
     finally:

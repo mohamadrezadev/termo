@@ -4,10 +4,11 @@ import { ThermalImage, Marker, Region, ThermalMetadata } from './thermal-utils';
 import { Language } from './translations';
 import { Template, TemplateData } from './template-service';
 import { 
-  saveProjectToStorage, 
-  loadProjectFromStorage,
-  scheduleAutoSave,
-  deleteProjectFromStorage
+  saveProject, 
+  loadProjectById,
+  loadAllProjects,
+  deleteProjectFromBackend,
+  serializeProjectForApi
 } from './project-service';
 import { toast } from 'sonner';
 
@@ -42,7 +43,7 @@ export interface AppState {
   
   // Project Management
   currentProject: Project | null;
-  projects: Project[];
+  projects: ProjectResponse[];
   
   // Current Image and Analysis
   activeImageId: string | null;
@@ -96,8 +97,9 @@ export interface AppState {
   setLanguage: (language: Language) => void;
   toggleFullscreen: () => void;
   setCurrentProject: (project: Project | null) => void;
-  addProject: (project: Project) => void;
+  addProject: (project: ProjectResponse) => void;
   removeProject: (projectId: string) => Promise<void>;
+  loadAllProjects: () => Promise<void>;
   saveCurrentProject: (project: Project) => Promise<void>;
   loadProjectById: (projectId: string) => Promise<void>;
   autoSaveProject: () => void;
@@ -327,14 +329,18 @@ export const useAppStore = create<AppState>()(
         projects: [...state.projects, project]
       })),
 
+      loadAllProjects: async () => {
+        const projects = await loadAllProjects();
+        set({ projects: projects });
+      },
+
       removeProject: async (projectId) => {
-        const result = deleteProjectFromStorage(projectId);
+        const result = await deleteProjectFromBackend(projectId);
         if (result.success) {
           set((state) => ({
             projects: state.projects.filter(p => p.id !== projectId),
             currentProject: state.currentProject?.id === projectId ? null : state.currentProject
           }));
-          toast.success('Project deleted successfully');
         } else {
           toast.error(result.error || 'Failed to delete project');
         }
@@ -345,25 +351,37 @@ export const useAppStore = create<AppState>()(
         
         try {
           console.log('[STORE] Saving project...', project.name);
-          const result = await saveProjectToStorage(
+          const result = await saveProject(
             project,
             state.images,
             state.markers,
             state.regions
           );
           
-          if (result.success) {
-            const updatedProjects = state.projects.map(p => 
-              p.id === project.id ? project : p
-            );
-            
-            if (!updatedProjects.find(p => p.id === project.id)) {
-              updatedProjects.push(project);
-            }
+          if (result.success && result.project) {
+            // Update the current project with the ID and metadata from the API response
+            const updatedProject: Project = {
+              ...project,
+              id: result.project.id,
+              hasUnsavedChanges: false
+            };
 
-            set({
-              projects: updatedProjects,
-              currentProject: { ...project, hasUnsavedChanges: false }
+            // Update the list of projects
+            set((state) => {
+              const existingIndex = state.projects.findIndex(p => p.id === result.project!.id);
+              let newProjects: ProjectResponse[];
+              if (existingIndex !== -1) {
+                newProjects = state.projects.map((p, index) => 
+                  index === existingIndex ? result.project! : p
+                );
+              } else {
+                newProjects = [...state.projects, result.project!];
+              }
+
+              return {
+                currentProject: updatedProject,
+                projects: newProjects
+              };
             });
             
             toast.success('Project saved successfully');
@@ -377,47 +395,46 @@ export const useAppStore = create<AppState>()(
       },
 
       loadProjectById: async (projectId: string) => {
-        try {
-          console.log('[STORE] Loading project:', projectId);
-          const result = loadProjectFromStorage(projectId);
-          console.log("loadp",result)
+        const result = await loadProjectById(projectId);
+        
+        if (result) {
+          const { project, images, markers, regions } = result;
           
-          if (result.success && result.data) {
-            const { project, images, markers, regions } = result.data;
-            
-            console.log('[STORE] Project loaded from storage');
-            console.log('[STORE] Images:', images.length);
-            console.log('[STORE] Markers:', markers.length);
-            console.log('[STORE] Regions:', regions.length);
-            
-            set({
-              currentProject: project,
-              images: images,
-              markers: markers,
-              regions: regions,
-              activeImageId: images[0]?.id || null
-            });
-            
-            toast.success('Project loaded successfully');
-          } else {
-            toast.error(result.error || 'Failed to load project');
-          }
-        } catch (error) {
-          console.error('[STORE] Error loading project:', error);
+          set({ 
+            currentProject: project,
+            images: images,
+            markers: markers,
+            regions: regions,
+            activeImageId: images?.[0]?.id || null
+          });
+          toast.success(`Project "${project.name}" loaded successfully`);
+        } else {
           toast.error('Failed to load project');
         }
       },
 
       autoSaveProject: () => {
         const state = get();
-        if (state.currentProject) {
-          console.log('[STORE] Scheduling auto-save...');
-          scheduleAutoSave(
+        if (state.currentProject && state.currentProject.hasUnsavedChanges) {
+          console.log('[STORE] Auto-saving project...');
+          saveProject(
             state.currentProject,
             state.images,
             state.markers,
             state.regions
-          );
+          ).then((result) => {
+            if (result.success) {
+              set((state) => ({
+                currentProject: { ...state.currentProject, hasUnsavedChanges: false } as Project,
+                projects: state.projects.map(p => 
+                  p.id === state.currentProject?.id ? { ...p, hasUnsavedChanges: false } : p
+                ) as ProjectResponse[]
+              }));
+              console.log('[STORE] Auto-save successful.');
+            } else {
+              console.error('[STORE] Auto-save failed:', result.error);
+            }
+          });
         }
       },
 
