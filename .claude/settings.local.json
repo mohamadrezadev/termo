@@ -9,7 +9,9 @@
       "Bash(powershell -Command \"& { $vsPath = & ''C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe'' -latest -property installationPath; Import-Module (Join-Path $vsPath ''Common7\\Tools\\Microsoft.VisualStudio.DevShell.dll''); Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation; Set-Location ''d:\\پروژه های دانش بنیان\\termo2\\termo\\server\\ConsoleApp1\\ConsoleApp1''; msbuild BmtExtract.csproj /p:Configuration=Debug /t:Rebuild }\")",
       "Bash(test:*)",
       "Bash(python:*)",
-      "Bash(python -c:*)"
+      "Bash(python -c:*)",
+      "Bash(del \"d:\\پروژه های دانش بنیان\\termo2\\termo\\client\\lib\\project-service-api.ts\")",
+      "Bash(rm:*)"
     ],
     "deny": [],
     "ask": []

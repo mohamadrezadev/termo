@@ -25,7 +25,8 @@ import {
   Calendar,
   Building2,
   User,
-  Loader2
+  Loader2,
+  RefreshCw
 } from 'lucide-react';
 import { generateId } from '@/lib/utils';
 import { Project } from '@/lib/store';
@@ -45,6 +46,7 @@ export default function ProjectDialog({
     language, 
     currentProject, 
     projects,
+    isLoadingProjects,
     images,
     markers,
     regions,
@@ -52,7 +54,8 @@ export default function ProjectDialog({
     addProject,
     removeProject,
     saveCurrentProject,
-    loadProjectById
+    loadProjectById,
+    loadAllProjects
   } = useAppStore();
   
   const t = translations[language];
@@ -64,6 +67,15 @@ export default function ProjectDialog({
   const [notes, setNotes] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  // بارگذاری پروژه‌ها هنگام باز شدن تب "open"
+  useEffect(() => {
+    if (open && currentMode === 'open') {
+      console.log('[PROJECT_DIALOG] Loading projects for open tab');
+      loadAllProjects();
+    }
+  }, [open, currentMode, loadAllProjects]);
+
+  // تنظیم مقادیر فیلدها هنگام تغییر حالت
   useEffect(() => {
     if (open) {
       setCurrentMode(mode);
@@ -100,66 +112,81 @@ export default function ProjectDialog({
       hasUnsavedChanges: false
     };
 
+    console.log('[PROJECT_DIALOG] Creating new project:', newProject.name);
+    console.log('[PROJECT_DIALOG] This will clear all existing images, markers, and regions');
+
     addProject(newProject);
     setCurrentProject(newProject);
+
+    // Save project name to localStorage for upload
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('currentProjectName', newProject.name);
+    }
+
     toast.success(t.projectCreated);
     onOpenChange(false);
   };
 
   const handleSaveProject = async () => {
-  if (!currentProject) {
-    toast.error(t.noActiveProject);
-    return;
-  }
+    if (!currentProject) {
+      toast.error(t.noActiveProject);
+      return;
+    }
 
-  if (!projectName.trim()) {
-    toast.error(t.enterProjectName);
-    return;
-  }
+    if (!projectName.trim()) {
+      toast.error(t.enterProjectName);
+      return;
+    }
 
-  setIsLoading(true);
-  try {
-    console.log('[PROJECT_DIALOG] Starting save...');
-    
-    const updatedProject: Project = {
-      ...currentProject,
-      name: projectName,
-      operator: operator || currentProject.operator,
-      company: company || currentProject.company,
-      notes: notes || currentProject.notes,
-      images: images,
-      markers: markers,
-      regions: regions,
-      hasUnsavedChanges: false
-    };
+    setIsLoading(true);
+    try {
+      console.log('[PROJECT_DIALOG] Starting save...');
+      
+      const updatedProject: Project = {
+        ...currentProject,
+        name: projectName,
+        operator: operator || currentProject.operator,
+        company: company || currentProject.company,
+        notes: notes || currentProject.notes,
+        images: images,
+        markers: markers,
+        regions: regions,
+        hasUnsavedChanges: false
+      };
 
-    console.log('[PROJECT_DIALOG] Calling saveCurrentProject with:', {
-      projectName: updatedProject.name,
-      imagesCount: images.length,
-      markersCount: markers.length,
-      regionsCount: regions.length
-    });
+      console.log('[PROJECT_DIALOG] Calling saveCurrentProject with:', {
+        projectName: updatedProject.name,
+        imagesCount: images.length,
+        markersCount: markers.length,
+        regionsCount: regions.length
+      });
 
-    await saveCurrentProject(updatedProject);
-    
-    console.log('[PROJECT_DIALOG] Save completed');
-    onOpenChange(false);
-  } catch (error) {
-    console.error('[PROJECT_DIALOG] Error saving project:', error);
-    toast.error('خطا در ذخیره پروژه');
-  } finally {
-    setIsLoading(false);
-  }
-};
+      await saveCurrentProject(updatedProject);
+      
+      console.log('[PROJECT_DIALOG] Save completed');
+      onOpenChange(false);
+    } catch (error) {
+      console.error('[PROJECT_DIALOG] Error saving project:', error);
+      toast.error('خطا در ذخیره پروژه');
+    } finally {
+      setIsLoading(false);
+    }
+  };
  
-
   const handleOpenProject = async (project: Project) => {
     setIsLoading(true);
     try {
+      console.log('[PROJECT_DIALOG] Opening project:', project.id, project.name);
       await loadProjectById(project.id);
+
+      // Save project name to localStorage for upload
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('currentProjectName', project.name);
+      }
+
       onOpenChange(false);
     } catch (error) {
-      console.error('Error opening project:', error);
+      console.error('[PROJECT_DIALOG] Error opening project:', error);
       toast.error(t.error || 'Failed to load project');
     } finally {
       setIsLoading(false);
@@ -168,8 +195,20 @@ export default function ProjectDialog({
 
   const handleDeleteProject = async (projectId: string, projectName: string) => {
     if (confirm(`${t.confirmDelete} "${projectName}"?`)) {
-      await removeProject(projectId);
+      setIsLoading(true);
+      try {
+        await removeProject(projectId);
+      } catch (error) {
+        console.error('[PROJECT_DIALOG] Error deleting project:', error);
+      } finally {
+        setIsLoading(false);
+      }
     }
+  };
+
+  const handleRefreshProjects = async () => {
+    console.log('[PROJECT_DIALOG] Refreshing projects list');
+    await loadAllProjects();
   };
 
   const formatDate = (date: Date) => {
@@ -214,6 +253,7 @@ export default function ProjectDialog({
             </TabsTrigger>
           </TabsList>
 
+          {/* تب ایجاد پروژه جدید */}
           <TabsContent value="new" className="space-y-4 mt-4">
             <div className="space-y-3">
               <div className="space-y-2">
@@ -275,9 +315,22 @@ export default function ProjectDialog({
             </DialogFooter>
           </TabsContent>
 
+          {/* تب باز کردن پروژه */}
           <TabsContent value="open" className="mt-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-medium">{language === 'fa' ? 'پروژه‌های موجود' : 'Available Projects'}</h3>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleRefreshProjects}
+                disabled={isLoadingProjects || isLoading}
+              >
+                <RefreshCw className={`w-4 h-4 ${isLoadingProjects ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
+
             <ScrollArea className="h-[400px] pr-4">
-              {isLoading ? (
+              {isLoadingProjects || isLoading ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
                     <Loader2 className="animate-spin h-12 w-12 text-primary mx-auto mb-4" />
@@ -359,6 +412,7 @@ export default function ProjectDialog({
             </ScrollArea>
           </TabsContent>
 
+          {/* تب ذخیره پروژه */}
           <TabsContent value="save" className="space-y-4 mt-4">
             {currentProject ? (
               <>

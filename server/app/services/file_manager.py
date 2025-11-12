@@ -1,5 +1,6 @@
 # server/app/services/file_manager.py
 import os
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -20,14 +21,38 @@ class FileManager:
         # Base directory for all projects
         self.projects_dir = settings.PROJECTS_DIR
         self.projects_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Temporary directory
         self.temp_dir = Path(tempfile.gettempdir()) / "thermal_analyzer_temp"
         self.temp_dir.mkdir(exist_ok=True)
 
-    def get_project_dir(self, project_id: str) -> Path:
-        """Get the directory path for a project"""
-        return self.projects_dir / project_id
+    @staticmethod
+    def sanitize_folder_name(name: str) -> str:
+        """
+        Sanitize a project name to create a valid folder name.
+        Removes invalid characters and replaces spaces with underscores.
+        """
+        # Replace spaces with underscores
+        sanitized = name.replace(" ", "_")
+        # Remove invalid filesystem characters
+        sanitized = re.sub(r'[<>:"/\\|?*]', '', sanitized)
+        # Limit length to 100 characters
+        sanitized = sanitized[:100]
+        # Remove leading/trailing dots and spaces
+        sanitized = sanitized.strip('. ')
+        # If empty after sanitization, use a default
+        if not sanitized:
+            sanitized = "project"
+        return sanitized
+
+    def get_project_dir(self, project_identifier: str) -> Path:
+        """
+        Get the directory path for a project.
+
+        Args:
+            project_identifier: Can be project name or UUID
+        """
+        return self.projects_dir / project_identifier
 
     def create_project_directories(self, project_id: str) -> None:
         """

@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     # Application
     APP_NAME: str = "Thermal Analyzer Backend"
     VERSION: str = "1.0.0"
-    API_V1_STR: str = "/api"
+    API_V1_STR: str = "/api/v1"
     
     # Database
     DATABASE_URL: str = "sqlite:///./data/app.db"
@@ -43,4 +43,12 @@ class Settings(BaseSettings):
         self.TEMP_DIR.mkdir(exist_ok=True)
         self.FONTS_DIR.mkdir(parents=True, exist_ok=True)
 
-settings = Settings()
+# Create a single instance of settings
+_settings = Settings()
+
+def get_settings() -> Settings:
+    """Get the application settings instance"""
+    return _settings
+
+# For backward compatibility
+settings = _settings

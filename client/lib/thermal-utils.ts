@@ -27,6 +27,8 @@ export interface ThermalImage {
   canvas?: HTMLCanvasElement;
   preRenderedThermalUrl?: string;
   serverRenderedThermalUrl?: string | null; // New field
+  serverPalettes?: Record<string, string>; // Store all palette URLs from server (e.g., {iron: "/files/...", rainbow: "/files/..."})
+  csvUrl?: string | null; // Store CSV URL for reference
 }
 // به lib/thermal-utils.ts این توابع را اضافه/جایگزین کنید
 
@@ -235,72 +237,137 @@ export async function processThermalDataFromCSV(
 ): Promise<ThermalData> {
   console.log('[THERMAL_UTILS] Processing thermal data from CSV:', csvUrl);
 
-  const response = await fetch(csvUrl, {
-    mode: 'cors',
-    credentials: 'omit'
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch CSV: ${response.status} ${response.statusText}`);
-  }
-
-  const csvText = await response.text();
-  console.log(`[THERMAL_UTILS] CSV loaded, size: ${(csvText.length / 1024).toFixed(2)} KB`);
-
-  // Parse CSV
-  const rows = csvText.trim().split('\n');
-  const temperatureMatrix: number[][] = rows.map(row =>
-    row.split(',').map(val => parseFloat(val.trim()))
-  );
-
-  const height = temperatureMatrix.length;
-  const width = temperatureMatrix[0]?.length || 0;
-
-  if (width === 0 || height === 0) {
-    throw new Error('Invalid CSV: empty temperature matrix');
-  }
-
-  console.log(`[THERMAL_UTILS] CSV parsed: ${width}x${height} pixels`);
-
-  // محاسبه min/max temperature
-  let minTemp = Infinity;
-  let maxTemp = -Infinity;
-
-  temperatureMatrix.forEach(row => {
-    row.forEach(temp => {
-      if (!isNaN(temp)) {
-        minTemp = Math.min(minTemp, temp);
-        maxTemp = Math.max(maxTemp, temp);
-      }
+  try {
+    const response = await fetch(csvUrl, {
+      mode: 'cors',
+      credentials: 'omit'
     });
-  });
 
-  if (minTemp === Infinity) {
-    minTemp = 0;
-    maxTemp = 0;
+    if (!response.ok) {
+      throw new Error(`Failed to fetch CSV: ${response.status} ${response.statusText}`);
+    }
+
+    const csvText = await response.text();
+    console.log(`[THERMAL_UTILS] CSV loaded, size: ${(csvText.length / 1024).toFixed(2)} KB`);
+
+    // Validate CSV content is not empty
+    if (!csvText || csvText.trim().length === 0) {
+      throw new Error('CSV file is empty');
+    }
+
+    // Parse CSV with validation
+    const rows = csvText.trim().split('\n').filter(row => row.trim().length > 0);
+
+    if (rows.length === 0) {
+      throw new Error('CSV has no valid rows');
+    }
+
+    // Parse temperature matrix with error handling
+    const temperatureMatrix: number[][] = [];
+    const firstRowLength = rows[0].split(',').length;
+
+    for (let i = 0; i < rows.length; i++) {
+      const values = rows[i].split(',').map(val => {
+        const parsed = parseFloat(val.trim());
+        return isNaN(parsed) ? 0 : parsed; // Replace NaN with 0
+      });
+
+      // Validate row length consistency
+      if (values.length !== firstRowLength) {
+        console.warn(`[THERMAL_UTILS] Row ${i} has inconsistent length (${values.length} vs ${firstRowLength}), padding/truncating`);
+        // Pad with zeros if too short
+        while (values.length < firstRowLength) {
+          values.push(0);
+        }
+        // Truncate if too long
+        values.length = firstRowLength;
+      }
+
+      temperatureMatrix.push(values);
+    }
+
+    const height = temperatureMatrix.length;
+    const width = temperatureMatrix[0]?.length || 0;
+
+    if (width === 0 || height === 0) {
+      throw new Error('Invalid CSV: empty temperature matrix');
+    }
+
+    // Validate reasonable dimensions (not too small, not too large)
+    if (width < 10 || height < 10) {
+      throw new Error(`CSV dimensions too small: ${width}x${height} (minimum 10x10)`);
+    }
+
+    if (width > 10000 || height > 10000) {
+      throw new Error(`CSV dimensions too large: ${width}x${height} (maximum 10000x10000)`);
+    }
+
+    console.log(`[THERMAL_UTILS] CSV parsed: ${width}x${height} pixels`);
+
+    // محاسبه min/max temperature با validation
+    let minTemp = Infinity;
+    let maxTemp = -Infinity;
+    let validTempCount = 0;
+
+    temperatureMatrix.forEach(row => {
+      row.forEach(temp => {
+        if (!isNaN(temp) && isFinite(temp)) {
+          minTemp = Math.min(minTemp, temp);
+          maxTemp = Math.max(maxTemp, temp);
+          validTempCount++;
+        }
+      });
+    });
+
+    // Check if we have enough valid temperature readings
+    const totalPixels = width * height;
+    if (validTempCount < totalPixels * 0.5) {
+      console.warn(`[THERMAL_UTILS] Less than 50% valid temperature readings (${validTempCount}/${totalPixels})`);
+    }
+
+    if (minTemp === Infinity) {
+      console.warn('[THERMAL_UTILS] No valid temperature readings, using defaults');
+      minTemp = 0;
+      maxTemp = 100;
+    }
+
+    // Validate temperature range is reasonable
+    if (minTemp < -273.15) { // Below absolute zero
+      console.warn(`[THERMAL_UTILS] Invalid min temperature: ${minTemp}°C, clamping to -273.15°C`);
+      minTemp = -273.15;
+    }
+
+    if (maxTemp > 3000) { // Unreasonably high
+      console.warn(`[THERMAL_UTILS] Invalid max temperature: ${maxTemp}°C, clamping to 3000°C`);
+      maxTemp = 3000;
+    }
+
+    console.log(`[THERMAL_UTILS] Temperature range: ${minTemp.toFixed(2)}°C - ${maxTemp.toFixed(2)}°C`);
+    console.log(`[THERMAL_UTILS] Valid temperature readings: ${validTempCount}/${totalPixels} (${(validTempCount/totalPixels*100).toFixed(1)}%)`);
+
+    // ساخت metadata کامل
+    const fullMetadata: ThermalMetadata = {
+      emissivity: metadata?.emissivity ?? 0.95,
+      ambientTemp: metadata?.ambientTemp ?? 20,
+      reflectedTemp: metadata?.reflectedTemp ?? 20,
+      humidity: metadata?.humidity ?? 0.5,
+      distance: metadata?.distance ?? 1.0,
+      cameraModel: metadata?.cameraModel || 'Thermal Camera',
+      timestamp: metadata?.timestamp || new Date()
+    };
+
+    return {
+      width,
+      height,
+      temperatureMatrix,
+      minTemp,
+      maxTemp,
+      metadata: fullMetadata
+    };
+  } catch (error) {
+    console.error('[THERMAL_UTILS] Error processing CSV:', error);
+    throw new Error(`Failed to process thermal CSV: ${error instanceof Error ? error.message : String(error)}`);
   }
-
-  console.log(`[THERMAL_UTILS] Temperature range: ${minTemp.toFixed(2)}°C - ${maxTemp.toFixed(2)}°C`);
-
-  // ساخت metadata کامل
-  const fullMetadata: ThermalMetadata = {
-    emissivity: metadata?.emissivity ?? 0.95,
-    ambientTemp: metadata?.ambientTemp ?? 20,
-    reflectedTemp: metadata?.reflectedTemp ?? 20,
-    humidity: metadata?.humidity ?? 0.5,
-    distance: metadata?.distance ?? 1.0,
-    cameraModel: metadata?.cameraModel || 'Thermal Camera',
-    timestamp: metadata?.timestamp || new Date()
-  };
-
-  return {
-    width,
-    height,
-    temperatureMatrix,
-    minTemp,
-    maxTemp,
-    metadata: fullMetadata
-  };
 }
 
 /**
@@ -395,4 +462,20 @@ export function getTemperatureAtPixel(thermalData: ThermalData, x: number, y: nu
   }
 
   return thermalData.temperatureMatrix[floorY][floorX];
+}
+
+// Temperature conversion utilities
+export function celsiusToFahrenheit(celsius: number): number {
+  return (celsius * 9/5) + 32;
+}
+
+export function fahrenheitToCelsius(fahrenheit: number): number {
+  return (fahrenheit - 32) * 5/9;
+}
+
+export function formatTemperature(celsius: number, unit: 'C' | 'F' = 'F'): string {
+  if (unit === 'F') {
+    return `${celsiusToFahrenheit(celsius).toFixed(1)}°F`;
+  }
+  return `${celsius.toFixed(1)}°C`;
 }

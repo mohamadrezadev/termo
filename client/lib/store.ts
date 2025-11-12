@@ -4,11 +4,11 @@ import { ThermalImage, Marker, Region, ThermalMetadata } from './thermal-utils';
 import { Language } from './translations';
 import { Template, TemplateData } from './template-service';
 import { 
-  saveProject, 
-  loadProjectById,
-  loadAllProjects,
-  deleteProjectFromBackend,
-  serializeProjectForApi
+  saveProjectToAPI, 
+  loadProjectFromAPI,
+  scheduleAutoSave,
+  deleteProjectFromAPI,
+  loadProjectsFromAPI
 } from './project-service';
 import { toast } from 'sonner';
 
@@ -43,7 +43,8 @@ export interface AppState {
   
   // Project Management
   currentProject: Project | null;
-  projects: ProjectResponse[];
+  projects: Project[];
+  isLoadingProjects: boolean;
   
   // Current Image and Analysis
   activeImageId: string | null;
@@ -97,11 +98,11 @@ export interface AppState {
   setLanguage: (language: Language) => void;
   toggleFullscreen: () => void;
   setCurrentProject: (project: Project | null) => void;
-  addProject: (project: ProjectResponse) => void;
+  addProject: (project: Project) => void;
   removeProject: (projectId: string) => Promise<void>;
-  loadAllProjects: () => Promise<void>;
   saveCurrentProject: (project: Project) => Promise<void>;
   loadProjectById: (projectId: string) => Promise<void>;
+  loadAllProjects: () => Promise<void>;
   autoSaveProject: () => void;
   setActiveImage: (imageId: string | null) => void;
   addImage: (image: ThermalImage) => void;
@@ -251,6 +252,7 @@ export const useAppStore = create<AppState>()(
       isFullscreen: false,
       currentProject: null,
       projects: [],
+      isLoadingProjects: false,
       activeImageId: null,
       images: [],
       markers: [],
@@ -279,10 +281,11 @@ export const useAppStore = create<AppState>()(
       gridRows: 2,
       globalParameters: {
         emissivity: 0.95,
-        ambientTemp: 20,
-        reflectedTemp: 20,
-        humidity: 50,
-        distance: 1.0
+        ambientTemperature: 20,
+        atmosphericTransmission: 1.0,
+        distanceToObject: 1.0,
+        relativeHumidity: 50,
+        reflectedTemperature: 20
       },
       timelineImages: [],
       currentTimeIndex: 0,
@@ -291,37 +294,32 @@ export const useAppStore = create<AppState>()(
       templates: [],
 
       // Actions
-      setLanguage: (language) => set({ 
-        language, 
-        isRTL: language === 'fa' 
-      }),
+      setLanguage: (language) => {
+        set({ language, isRTL: language === 'fa' });
+      },
 
-      toggleFullscreen: () => set((state) => {
-        const newFullscreen = !state.isFullscreen;
-        if (typeof document !== 'undefined') {
-          if (newFullscreen) {
-            document.documentElement.requestFullscreen?.();
-          } else {
-            document.exitFullscreen?.();
-          }
-        }
-        return { isFullscreen: newFullscreen };
-      }),
+      toggleFullscreen: () => set((state) => ({
+        isFullscreen: !state.isFullscreen
+      })),
 
       setCurrentProject: (project) => {
+        set({ currentProject: project });
         if (project) {
-          console.log('[STORE] Setting current project:', project.name);
-          console.log('[STORE] Project images count:', project.images?.length);
-          
-          set({ 
-            currentProject: project,
+          set({
+            activeImageId: project.images[0]?.id || null,
             images: project.images || [],
             markers: project.markers || [],
-            regions: project.regions || [],
-            activeImageId: project.images?.[0]?.id || null
+            regions: project.regions || []
           });
         } else {
-          set({ currentProject: null });
+          // Clear all data when project is set to null
+          set({
+            currentProject: null,
+            images: [],
+            markers: [],
+            regions: [],
+            activeImageId: null
+          });
         }
       },
 
@@ -329,20 +327,25 @@ export const useAppStore = create<AppState>()(
         projects: [...state.projects, project]
       })),
 
-      loadAllProjects: async () => {
-        const projects = await loadAllProjects();
-        set({ projects: projects });
-      },
-
       removeProject: async (projectId) => {
-        const result = await deleteProjectFromBackend(projectId);
-        if (result.success) {
-          set((state) => ({
-            projects: state.projects.filter(p => p.id !== projectId),
-            currentProject: state.currentProject?.id === projectId ? null : state.currentProject
-          }));
-        } else {
-          toast.error(result.error || 'Failed to delete project');
+        try {
+          console.log('[STORE] Removing project:', projectId);
+          const result = await deleteProjectFromAPI(projectId);
+          
+          if (result.success) {
+            set((state) => ({
+              projects: state.projects.filter(p => p.id !== projectId),
+              currentProject: state.currentProject?.id === projectId ? null : state.currentProject
+            }));
+            toast.success('Project deleted successfully');
+            console.log('[STORE] Project removed successfully');
+          } else {
+            toast.error(result.error || 'Failed to delete project');
+            console.error('[STORE] Error deleting project:', result.error);
+          }
+        } catch (error) {
+          console.error('[STORE] Error in removeProject:', error);
+          toast.error('Failed to delete project');
         }
       },
 
@@ -351,27 +354,32 @@ export const useAppStore = create<AppState>()(
         
         try {
           console.log('[STORE] Saving project...', project.name);
-          const result = await saveProject(
+          const result = await saveProjectToAPI(
             project,
             state.images,
             state.markers,
             state.regions
           );
           
-          if (result.success && result.project) {
-            // Update the current project with the ID and metadata from the API response
-            const updatedProject: Project = {
-              ...project,
-              id: result.project.id,
-              hasUnsavedChanges: false
-            };
-
-            // Update the list of projects
+          if (result.success) {
+            const updatedProjects = state.projects.map(p => 
+              p.id === project.id ? project : p
+            );
             
+            if (!updatedProjects.find(p => p.id === project.id)) {
+              updatedProjects.push(project);
+            }
+
+            set({
+              projects: updatedProjects,
+              currentProject: { ...project, hasUnsavedChanges: false }
+            });
             
             toast.success('Project saved successfully');
+            console.log('[STORE] Project saved successfully:', result.projectId);
           } else {
             toast.error(result.error || 'Failed to save project');
+            console.error('[STORE] Error saving project:', result.error);
           }
         } catch (error) {
           console.error('[STORE] Error saving project:', error);
@@ -380,46 +388,82 @@ export const useAppStore = create<AppState>()(
       },
 
       loadProjectById: async (projectId: string) => {
-        const result = await loadProjectById(projectId);
-        
-        if (result) {
-          const { project, images, markers, regions } = result;
+        try {
+          console.log('[STORE] Loading project:', projectId);
+          const result = await loadProjectFromAPI(projectId);
+          
+          if (result.success && result.data) {
+            const { project, images, markers, regions } = result.data;
+            
+            console.log('[STORE] Project loaded from API');
+            console.log('[STORE] Images:', images.length);
+            console.log('[STORE] Markers:', markers.length);
+            console.log('[STORE] Regions:', regions.length);
+            
+            set({
+              currentProject: project,
+              images: images,
+              markers: markers,
+              regions: regions,
+              activeImageId: images[0]?.id || null
+            });
+            
+            toast.success('Project loaded successfully');
+          } else {
+            toast.error(result.error || 'Failed to load project');
+            console.error('[STORE] Error loading project:', result.error);
+          }
+        } catch (error) {
+          console.error('[STORE] Error loading project:', error);
+          toast.error('Failed to load project');
+        }
+      },
+
+      loadAllProjects: async () => {
+        try {
+          console.log('[STORE] Loading all projects...');
+          set({ isLoadingProjects: true });
+          
+          const projects = await loadProjectsFromAPI();
+          console.log('[STORE] Loaded projects:', projects.length);
+          
+          // تبدیل پروژه‌های سریالایز شده به Project objects
+          const convertedProjects: Project[] = projects.map(p => ({
+            id: p.id,
+            name: p.name,
+            operator: p.operator,
+            company: p.company,
+            date: new Date(p.date),
+            notes: p.notes,
+            images: [],
+            markers: [],
+            regions: [],
+            hasUnsavedChanges: false
+          }));
           
           set({ 
-            currentProject: project,
-            images: images,
-            markers: markers,
-            regions: regions,
-            activeImageId: images?.[0]?.id || null
+            projects: convertedProjects,
+            isLoadingProjects: false
           });
-          toast.success(`Project "${project.name}" loaded successfully`);
-        } else {
-          toast.error('Failed to load project');
+          
+          console.log('[STORE] Projects loaded successfully');
+        } catch (error) {
+          console.error('[STORE] Error loading projects:', error);
+          set({ isLoadingProjects: false });
+          toast.error('Failed to load projects');
         }
       },
 
       autoSaveProject: () => {
         const state = get();
-        if (state.currentProject && state.currentProject.hasUnsavedChanges) {
-          console.log('[STORE] Auto-saving project...');
-          saveProject(
+        if (state.currentProject) {
+          console.log('[STORE] Scheduling auto-save...');
+          scheduleAutoSave(
             state.currentProject,
             state.images,
             state.markers,
             state.regions
-          ).then((result) => {
-            if (result.success) {
-              set((state) => ({
-                currentProject: { ...state.currentProject, hasUnsavedChanges: false } as Project,
-                projects: state.projects.map(p => 
-                  p.id === state.currentProject?.id ? { ...p, hasUnsavedChanges: false } : p
-                ) as ProjectResponse[]
-              }));
-              console.log('[STORE] Auto-save successful.');
-            } else {
-              console.error('[STORE] Auto-save failed:', result.error);
-            }
-          });
+          );
         }
       },
 
@@ -488,15 +532,45 @@ export const useAppStore = create<AppState>()(
         }
       },
 
-      updateMarker: (id, updates) => set((state) => ({
-        markers: state.markers.map(marker =>
+      updateMarker: (id, updates) => {
+        const state = get();
+        const newMarkers = state.markers.map(marker =>
           marker.id === id ? { ...marker, ...updates } : marker
-        )
-      })),
+        );
+        const updatedProject = state.currentProject ? {
+          ...state.currentProject,
+          markers: newMarkers,
+          hasUnsavedChanges: true
+        } : null;
 
-      removeMarker: (id) => set((state) => ({
-        markers: state.markers.filter(marker => marker.id !== id)
-      })),
+        set({
+          markers: newMarkers,
+          currentProject: updatedProject
+        });
+
+        if (updatedProject) {
+          scheduleAutoSave(updatedProject, state.images, newMarkers, state.regions);
+        }
+      },
+
+      removeMarker: (id) => {
+        const state = get();
+        const newMarkers = state.markers.filter(marker => marker.id !== id);
+        const updatedProject = state.currentProject ? {
+          ...state.currentProject,
+          markers: newMarkers,
+          hasUnsavedChanges: true
+        } : null;
+
+        set({
+          markers: newMarkers,
+          currentProject: updatedProject
+        });
+
+        if (updatedProject) {
+          scheduleAutoSave(updatedProject, state.images, newMarkers, state.regions);
+        }
+      },
 
       addRegion: (region) => {
         const state = get();
@@ -517,15 +591,45 @@ export const useAppStore = create<AppState>()(
         }
       },
 
-      updateRegion: (id, updates) => set((state) => ({
-        regions: state.regions.map(region =>
+      updateRegion: (id, updates) => {
+        const state = get();
+        const newRegions = state.regions.map(region =>
           region.id === id ? { ...region, ...updates } : region
-        )
-      })),
+        );
+        const updatedProject = state.currentProject ? {
+          ...state.currentProject,
+          regions: newRegions,
+          hasUnsavedChanges: true
+        } : null;
 
-      removeRegion: (id) => set((state) => ({
-        regions: state.regions.filter(region => region.id !== id)
-      })),
+        set({
+          regions: newRegions,
+          currentProject: updatedProject
+        });
+
+        if (updatedProject) {
+          scheduleAutoSave(updatedProject, state.images, state.markers, newRegions);
+        }
+      },
+
+      removeRegion: (id) => {
+        const state = get();
+        const newRegions = state.regions.filter(region => region.id !== id);
+        const updatedProject = state.currentProject ? {
+          ...state.currentProject,
+          regions: newRegions,
+          hasUnsavedChanges: true
+        } : null;
+
+        set({
+          regions: newRegions,
+          currentProject: updatedProject
+        });
+
+        if (updatedProject) {
+          scheduleAutoSave(updatedProject, state.images, state.markers, newRegions);
+        }
+      },
 
       setPalette: (palette) => set({ currentPalette: palette }),
 

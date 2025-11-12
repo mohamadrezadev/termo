@@ -8,6 +8,7 @@ from sqlmodel import Session
 from app.db import init_db
 from app.models.project import Project
 from app.db.session import get_db
+from pathlib import Path as SysPath  # تغییر نام برای جلوگیری از تداخل
 
 from app.core.config import settings
 from app.db.init_db import init_db
@@ -38,7 +39,10 @@ app.add_middleware(
 )
 
 # Mount static files
-app.mount("/files", StaticFiles(directory=str(settings.PROJECTS_DIR)), name="files")
+BASE_DIR = SysPath(__file__).resolve().parents[2]  # روت پروژه (termo)
+PROJECTS_DIR = BASE_DIR / "projects"
+PROJECTS_DIR.mkdir(exist_ok=True)  # اگر نبود ایجادش کن
+app.mount("/files/projects", StaticFiles(directory=str(PROJECTS_DIR)), name="projects")
 
 # Include API router
 app.include_router(api_router, prefix=settings.API_V1_STR)

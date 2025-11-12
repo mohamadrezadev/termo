@@ -11,10 +11,10 @@ def init_db() -> None:
     Initialize database by creating all tables.
     Should be called once at application startup.
     """
-    print("🗄️  Initializing database...")
+    print("[DB] Initializing database...")
     try:
         SQLModel.metadata.create_all(bind=engine)
-        print("✅ Database tables created successfully")
+        print("[DB] Database tables created successfully")
     except Exception as e:
-        print(f"❌ Error creating database tables: {e}")
+        print(f"[DB] Error creating database tables: {e}")
         raise
