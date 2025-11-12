@@ -32,25 +32,20 @@ namespace BmtExtractor
         {
             Console.OutputEncoding = System.Text.Encoding.UTF8;
 
-            string defaultPath = @"C:\Users\Public\Documents\Testo\IRSoft\Examples\example12.bmt";
-            string filePath = null;
-
-            if (args.Length > 0 && File.Exists(args[0]))
+            // مسیر فایل ورودی
+            if (args.Length == 0 || !File.Exists(args[0]))
             {
-                filePath = args[0];
-                Console.WriteLine($"📂 Using input file: {filePath}");
-            }
-            else
-            {
-                filePath = defaultPath;
-                Console.WriteLine($"⚠️ No valid input provided. Using default test file: {filePath}");
-            }
-
-            if (!File.Exists(filePath))
-            {
-                Console.WriteLine("{\"error\": \"File not found\"}");
+                Console.WriteLine("{\"error\": \"No valid input file provided\"}");
                 return;
             }
+            string inputFile = args[0];
+
+            // مسیر خروجی
+            string outputFolder = args.Length > 1 
+                ? args[1] 
+                : Path.Combine(Path.GetDirectoryName(inputFile), Path.GetFileNameWithoutExtension(inputFile));
+
+            Directory.CreateDirectory(outputFolder);
 
             bool useFahrenheit = Array.Exists(args, a => a.Equals("--fahrenheit", StringComparison.OrdinalIgnoreCase));
             bool skipImages = Array.Exists(args, a => a.Equals("--skip-images", StringComparison.OrdinalIgnoreCase));
@@ -59,21 +54,26 @@ namespace BmtExtractor
             try
             {
                 image = new ThermalImageApi();
-                image.Open(filePath);
+                image.Open(inputFile);
 
-                string baseDir = Path.GetDirectoryName(filePath);
-                string baseName = Path.GetFileNameWithoutExtension(filePath);
+                // string baseDir = Path.GetDirectoryName(filePath);
+                //string outputFolder = args.Length > 1 ? args[1] : Path.Combine(Path.GetDirectoryName(filePath), Path.GetFileNameWithoutExtension(filePath));
+                string baseName = Path.GetFileNameWithoutExtension(inputFile);
+
+
 
                 // فولدر خروجی به نام فایل اصلی
-                string outputFolder = Path.Combine(baseDir, baseName);
+                // string outputFolder = Path.Combine(baseDir, baseName);
                 Directory.CreateDirectory(outputFolder);
 
                 string csvPath = Path.Combine(outputFolder, baseName + "_temperature.csv");
-                string jsonPath = Path.Combine(outputFolder, baseName + "_output.json");
+                // string jsonPath = Path.Combine(outputFolder, baseName + "_output.json");
+                string jsonPath = Path.Combine(outputFolder, "data.json");
+
 
                 // استخراج تمام اطلاعات از فایل BMT
                 Console.WriteLine("📡 Extracting BMT file data...");
-                var bmtData = ExtractAllBmtData(image, useFahrenheit, filePath, outputFolder, baseName);
+                var bmtData = ExtractAllBmtData(image, useFahrenheit, inputFile, outputFolder, baseName);
 
                 // ذخیره داده‌های دما در CSV
                 Console.WriteLine("💾 Saving temperature data to CSV...");

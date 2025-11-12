@@ -367,22 +367,7 @@ export const useAppStore = create<AppState>()(
             };
 
             // Update the list of projects
-            set((state) => {
-              const existingIndex = state.projects.findIndex(p => p.id === result.project!.id);
-              let newProjects: ProjectResponse[];
-              if (existingIndex !== -1) {
-                newProjects = state.projects.map((p, index) => 
-                  index === existingIndex ? result.project! : p
-                );
-              } else {
-                newProjects = [...state.projects, result.project!];
-              }
-
-              return {
-                currentProject: updatedProject,
-                projects: newProjects
-              };
-            });
+            
             
             toast.success('Project saved successfully');
           } else {

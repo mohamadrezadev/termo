@@ -7,6 +7,6 @@ venv
 server/extracted_images/
 server/dist/
 server/build/
-
+projects/
 
 .env

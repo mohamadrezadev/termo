@@ -1,0 +1,136 @@
+{
+  "FileInfo": {
+    "FilePath": "D:\\\u067E\u0631\u0648\u0698\u0647 \u0647\u0627\u06CC \u062F\u0627\u0646\u0634 \u0628\u0646\u06CC\u0627\u0646\\termo2\\termo\\projects\\string_9dca0f43\\example03.BMT",
+    "FileName": "example03.BMT",
+    "FileSize": 1383037,
+    "OutputFolder": "D:\\\u067E\u0631\u0648\u0698\u0647 \u0647\u0627\u06CC \u062F\u0627\u0646\u0634 \u0628\u0646\u06CC\u0627\u0646\\termo2\\termo\\projects\\string_9dca0f43\\output"
+  },
+  "DeviceInfo": {
+    "DeviceName": "testo 882",
+    "SerialNumber": 1973691,
+    "FieldOfView": 32
+  },
+  "ImageInfo": {
+    "Width": 320,
+    "Height": 240,
+    "CreationDateTime": "2009-02-11T02:49:29.002Z",
+    "OriginalPalette": "IronBow"
+  },
+  "MeasurementInfo": {
+    "Emissivity": 0.94999998807907104,
+    "ReflectedTemperature": 20,
+    "Humidity": 50.003997802734375,
+    "TemperatureUnit": "\u00B0C",
+    "MeasurementRangeMin": -20,
+    "MeasurementRangeMax": 100
+  },
+  "ScaleSettings": {
+    "MinScaleTemperature": 11.8214197,
+    "MaxScaleTemperature": 40.366539
+  },
+  "HighlightSettings": {
+    "UseLimits": false,
+    "UseIsotherm": false,
+    "LowerIsothermTemperature": 25.4420872,
+    "UpperIsothermTemperature": 27.4420872,
+    "LowerLimitTemperature": 12.4036837,
+    "UpperLimitTemperature": 40.4804916
+  },
+  "TemperatureStats": {
+    "Min": 11.403681755065918,
+    "Max": 41.480487823486328,
+    "Average": 20.690779147955279,
+    "PointCount": 76800,
+    "SamplePoints": [
+      {
+        "X": 0,
+        "Y": 0,
+        "Temperature": 12.466899871826172
+      },
+      {
+        "X": 80,
+        "Y": 0,
+        "Temperature": 17.704080581665039
+      },
+      {
+        "X": 160,
+        "Y": 0,
+        "Temperature": 17.277168273925781
+      },
+      {
+        "X": 240,
+        "Y": 0,
+        "Temperature": 15.131362915039063
+      },
+      {
+        "X": 0,
+        "Y": 60,
+        "Temperature": 13.648741722106934
+      },
+      {
+        "X": 80,
+        "Y": 60,
+        "Temperature": 29.704170227050781
+      },
+      {
+        "X": 160,
+        "Y": 60,
+        "Temperature": 17.223987579345703
+      },
+      {
+        "X": 240,
+        "Y": 60,
+        "Temperature": 15.295575141906738
+      },
+      {
+        "X": 0,
+        "Y": 120,
+        "Temperature": 17.375925064086914
+      },
+      {
+        "X": 80,
+        "Y": 120,
+        "Temperature": 13.870748519897461
+      },
+      {
+        "X": 160,
+        "Y": 120,
+        "Temperature": 18.670864105224609
+      },
+      {
+        "X": 240,
+        "Y": 120,
+        "Temperature": 16.119409561157227
+      },
+      {
+        "X": 0,
+        "Y": 180,
+        "Temperature": 14.580058097839356
+      },
+      {
+        "X": 80,
+        "Y": 180,
+        "Temperature": 15.204268455505371
+      },
+      {
+        "X": 160,
+        "Y": 180,
+        "Temperature": 19.983089447021484
+      },
+      {
+        "X": 240,
+        "Y": 180,
+        "Temperature": 29.717475891113281
+      }
+    ],
+    "AnalysisMode": "full"
+  },
+  "Images": {
+    "iron": "D:\\\u067E\u0631\u0648\u0698\u0647 \u0647\u0627\u06CC \u062F\u0627\u0646\u0634 \u0628\u0646\u06CC\u0627\u0646\\termo2\\termo\\projects\\string_9dca0f43\\output\\example03_thermal_iron.png",
+    "rainbow": "D:\\\u067E\u0631\u0648\u0698\u0647 \u0647\u0627\u06CC \u062F\u0627\u0646\u0634 \u0628\u0646\u06CC\u0627\u0646\\termo2\\termo\\projects\\string_9dca0f43\\output\\example03_thermal_rainbow.png",
+    "grayscale": "D:\\\u067E\u0631\u0648\u0698\u0647 \u0647\u0627\u06CC \u062F\u0627\u0646\u0634 \u0628\u0646\u06CC\u0627\u0646\\termo2\\termo\\projects\\string_9dca0f43\\output\\example03_thermal_grayscale.png",
+    "hotcold": "D:\\\u067E\u0631\u0648\u0698\u0647 \u0647\u0627\u06CC \u062F\u0627\u0646\u0634 \u0628\u0646\u06CC\u0627\u0646\\termo2\\termo\\projects\\string_9dca0f43\\output\\example03_thermal_hotcold.png",
+    "visual": "D:\\\u067E\u0631\u0648\u0698\u0647 \u0647\u0627\u06CC \u062F\u0627\u0646\u0634 \u0628\u0646\u06CC\u0627\u0646\\termo2\\termo\\projects\\string_9dca0f43\\output\\example03_visual.png"
+  },
+  "CsvPath": "D:\\\u067E\u0631\u0648\u0698\u0647 \u0647\u0627\u06CC \u062F\u0627\u0646\u0634 \u0628\u0646\u06CC\u0627\u0646\\termo2\\termo\\projects\\string_9dca0f43\\output\\example03_temperature.csv"
+}

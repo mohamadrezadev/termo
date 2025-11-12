@@ -200,9 +200,9 @@ export default function ThermalViewer() {
         ? 'http://localhost:8080'
         : 'http://127.0.0.1:8080';
 
-      console.log(`[UPLOAD] Uploading file to: ${serverUrl}/api/extract-bmt`);
+      console.log(`[UPLOAD] Uploading file to: ${serverUrl}/api/thermal`);
 
-      const res = await fetch(`${serverUrl}/api/extract-bmt`, {
+      const res = await fetch(`${serverUrl}/api/thermal`, {
         method: 'POST',
         body: formData,
         mode: 'cors',

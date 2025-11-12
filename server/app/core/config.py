@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     
     # File Upload
     MAX_UPLOAD_SIZE: int = 100 * 1024 * 1024  # 100MB
-    
+    ALLOWED_EXTENSIONS: list[str] = [".bmt"]
     class Config:
         case_sensitive = True
         env_file = ".env"
