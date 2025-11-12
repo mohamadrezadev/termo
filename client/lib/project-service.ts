@@ -143,7 +143,9 @@ export async function loadAllProjects(): Promise<ProjectResponse[]> {
   }
 }
 
-export async function loadProjectFromStorage(projectId: string): Promise<{
+
+export async function loadProjectById(projectId: string): Promise<{
+
   project: Project;
   images: ThermalImage[];
   markers: Marker[];
@@ -151,6 +153,7 @@ export async function loadProjectFromStorage(projectId: string): Promise<{
 } | null> {  
   try {
     const apiProject = await fetchProjectById(projectId);
+    console.log('[PROJECT_SERVICE] Loaded project from API:', apiProject);
     return deserializeProjectFromApi(apiProject);
   } catch (error) {
     console.error(`Failed to load project ${projectId} from API:`, error);

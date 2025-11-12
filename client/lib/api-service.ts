@@ -1,10 +1,10 @@
 // lib/api-service.ts
-import { Project, ProjectResponse, ProjectDetailResponse, ProjectCreate, ProjectUpdate } from './types'; // Assuming types are defined or imported
+// import { Project, ProjectResponse, ProjectDetailResponse, ProjectCreate, ProjectUpdate } from './types'; // Assuming types are defined or imported
 import { toast } from 'sonner';
 
 // The base URL for the backend API.
 // We assume the backend runs on port 8000 for local development.
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = 'http://localhost:8080/api';
 
 // Helper function for API calls
 async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -32,7 +32,7 @@ async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise
   if (response.status === 204) {
     return null as T;
   }
-
+  console.log('[API_FETCH] Response data:', await response.clone().json());
   return response.json() as Promise<T>;
 }
 
@@ -41,6 +41,7 @@ async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise
 export async function fetchProjects(): Promise<ProjectResponse[]> {
   return apiFetch<ProjectResponse[]>('/projects');
 }
+
 
 export async function fetchProjectById(projectId: string): Promise<ProjectDetailResponse> {
   return apiFetch<ProjectDetailResponse>(`/project/${projectId}`);
@@ -73,7 +74,9 @@ export async function uploadFiles(projectId: string, thermalFile: File, visualFi
   formData.append('thermal', thermalFile);
   formData.append('visual', visualFile);
 
-  const response = await fetch(`${API_BASE_URL}/upload/${projectId}`, {
+
+  const response = await fetch(`${API_BASE_URL}/thermal/upload/${projectId}`, {
+
     method: 'POST',
     body: formData,
   });
