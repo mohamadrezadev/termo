@@ -74,7 +74,9 @@ export async function uploadFiles(projectId: string, thermalFile: File, visualFi
   formData.append('thermal', thermalFile);
   formData.append('visual', visualFile);
 
+
   const response = await fetch(`${API_BASE_URL}/thermal/upload/${projectId}`, {
+
     method: 'POST',
     body: formData,
   });
