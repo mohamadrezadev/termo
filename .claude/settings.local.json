@@ -11,7 +11,14 @@
       "Bash(python:*)",
       "Bash(python -c:*)",
       "Bash(del \"d:\\پروژه های دانش بنیان\\termo2\\termo\\client\\lib\\project-service-api.ts\")",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(npm run build:*)",
+      "Bash(pip install:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(timeout 5 bash:*)",
+      "Bash(curl:*)",
+      "Bash(dir:*)",
+      "Bash(npm run dist:*)"
     ],
     "deny": [],
     "ask": []

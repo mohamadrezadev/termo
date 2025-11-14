@@ -45,7 +45,9 @@ export default function TopMenuBar() {
     calculateGridLayout,
     currentProject,
     isFullscreen,
-    toggleFullscreen
+    toggleFullscreen,
+    addImage,
+    setActiveImage
   } = useAppStore();
   const t = translations[language];
 
@@ -55,17 +57,9 @@ export default function TopMenuBar() {
   const [projectDialogMode, setProjectDialogMode] = useState<'new' | 'open' | 'save'>('new');
 
   const handleFileUpload = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.bmt,.bmp,.jpg,.jpeg,.png,.tiff,.tif';
-    input.multiple = true;
-    input.onchange = (e) => {
-      const files = (e.target as HTMLInputElement).files;
-      if (files) {
-        console.log('Files selected:', files);
-      }
-    };
-    input.click();
+    // Trigger the ThermalViewer's file upload by dispatching a custom event
+    const event = new CustomEvent('thermalViewerUpload');
+    window.dispatchEvent(event);
   };
 
   const handleAutoArrange = () => {

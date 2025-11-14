@@ -299,20 +299,25 @@ export async function saveProjectToAPI(
   project: Project,
   images: ThermalImage[],
   markers: Marker[],
-  regions: Region[]
+  regions: Region[],
+  isNewProject: boolean = false
 ): Promise<{ success: boolean; error?: string; projectId?: string }> {
   try {
     console.log('[PROJECT_SERVICE_API] Starting project save to API...');
     console.log(`[PROJECT_SERVICE_API] Project: ${project.name}`);
+    console.log(`[PROJECT_SERVICE_API] Is New Project: ${isNewProject}`);
     console.log(`[PROJECT_SERVICE_API] Images: ${images.length}`);
     console.log(`[PROJECT_SERVICE_API] Markers: ${markers.length}`);
     console.log(`[PROJECT_SERVICE_API] Regions: ${regions.length}`);
-    
+
     const serialized = await serializeProject(project, images, markers, regions);
-    
+
     // استفاده از bulk save API
+    // اگر پروژه جدیده یا هنوز ID نداره، "null" رو بفرست تا سرور پروژه جدید بسازه
+    const projectIdToSend = isNewProject ? null : project.id;
+
     const result = await apiService.bulkSaveProject(
-      project.id,
+      projectIdToSend,
       {
         name: project.name,
         operator: project.operator,
@@ -329,7 +334,7 @@ export async function saveProjectToAPI(
       serialized.markers.map(m => ({
         id: m.id,
         image_id: m.imageId,
-        name: m.name,
+        name: m.name || m.label,
         x: m.x,
         y: m.y,
         temperature: m.temperature,
@@ -338,7 +343,7 @@ export async function saveProjectToAPI(
       serialized.regions.map(r => ({
         id: r.id,
         image_id: r.imageId,
-        name: r.name,
+        name: r.name || r.label,
         points: r.points,
         color: r.color,
         min_temp: r.minTemp,
@@ -347,13 +352,14 @@ export async function saveProjectToAPI(
         notes: r.notes
       }))
     );
-    
+
     console.log('[PROJECT_SERVICE_API] Project saved successfully to API');
+    console.log('[PROJECT_SERVICE_API] Returned project ID:', result.id);
     return { success: true, projectId: result.id };
   } catch (error) {
     console.error('[PROJECT_SERVICE_API] Error saving project:', error);
-    return { 
-      success: false, 
+    return {
+      success: false,
       error: error instanceof Error ? error.message : 'Failed to save project'
     };
   }

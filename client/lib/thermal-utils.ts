@@ -479,3 +479,9 @@ export function formatTemperature(celsius: number, unit: 'C' | 'F' = 'F'): strin
   }
   return `${celsius.toFixed(1)}°C`;
 }
+
+// Format temperature with both Celsius and Fahrenheit
+export function formatTemperatureDual(celsius: number): string {
+  const fahrenheit = celsiusToFahrenheit(celsius);
+  return `${celsius.toFixed(1)}°C (${fahrenheit.toFixed(1)}°F)`;
+}

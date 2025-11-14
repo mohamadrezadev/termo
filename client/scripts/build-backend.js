@@ -28,10 +28,11 @@ async function buildBackend() {
     const buildCommand = process.platform === 'win32' ? 'python' : 'python3';
     const args = [
       '-m', 'PyInstaller',
-      'main.py',
+      'app/main.py',
       '--name', 'thermal_api',
       '--onedir',
       '--noconsole',
+      '-y',
       '--hidden-import=uvicorn.lifespan.on',
       '--hidden-import=uvicorn.lifespan.off',
       '--hidden-import=uvicorn.loops.auto',

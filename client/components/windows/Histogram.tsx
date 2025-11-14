@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { useAppStore } from '@/lib/store';
 import { translations } from '@/lib/translations';
-import { COLOR_PALETTES, interpolateColor, ColorPalette } from '@/lib/thermal-utils';
+import { COLOR_PALETTES, interpolateColor, ColorPalette, formatTemperatureDual } from '@/lib/thermal-utils';
 import Window from './Window';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell } from 'recharts';
 
@@ -86,21 +86,21 @@ export default function Histogram() {
               <div className="space-y-1">
                 <div className="flex justify-between">
                   <span className="text-gray-400">Mean:</span>
-                  <span>{histogramData.stats?.mean}°C</span>
+                  <span>{formatTemperatureDual(histogramData.stats?.mean || 0)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Std Dev:</span>
-                  <span>{histogramData.stats?.stdDev}°C</span>
+                  <span>{formatTemperatureDual(histogramData.stats?.stdDev || 0)}</span>
                 </div>
               </div>
               <div className="space-y-1">
                 <div className="flex justify-between">
                   <span className="text-gray-400">Min:</span>
-                  <span>{histogramData.stats?.min}°C</span>
+                  <span>{formatTemperatureDual(histogramData.stats?.min || 0)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Max:</span>
-                  <span>{histogramData.stats?.max}°C</span>
+                  <span>{formatTemperatureDual(histogramData.stats?.max || 0)}</span>
                 </div>
               </div>
             </div>
@@ -136,8 +136,8 @@ export default function Histogram() {
                 background: `linear-gradient(to right, ${palette?.colors.join(', ')})`
               }} />
               <div className="flex justify-between text-xs text-gray-400 mt-1">
-                <span>{customMinTemp ?? activeImage.thermalData.minTemp.toFixed(1)}°C</span>
-                <span>{customMaxTemp ?? activeImage.thermalData.maxTemp.toFixed(1)}°C</span>
+                <span>{formatTemperatureDual(customMinTemp ?? activeImage.thermalData.minTemp)}</span>
+                <span>{formatTemperatureDual(customMaxTemp ?? activeImage.thermalData.maxTemp)}</span>
               </div>
             </div>
           </>

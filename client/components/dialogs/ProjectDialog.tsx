@@ -26,10 +26,13 @@ import {
   Building2,
   User,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  Edit,
+  Check,
+  X
 } from 'lucide-react';
-import { generateId } from '@/lib/utils';
 import { Project } from '@/lib/store';
+import { createProject } from '@/lib/api-service';
 
 interface ProjectDialogProps {
   open: boolean;
@@ -66,6 +69,7 @@ export default function ProjectDialog({
   const [company, setCompany] = useState('');
   const [notes, setNotes] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
 
   // بارگذاری پروژه‌ها هنگام باز شدن تب "open"
   useEffect(() => {
@@ -93,38 +97,64 @@ export default function ProjectDialog({
     }
   }, [open, mode, currentProject]);
 
-  const handleCreateProject = () => {
+  const handleCreateProject = async () => {
     if (!projectName.trim()) {
       toast.error(t.enterProjectName);
       return;
     }
 
-    const newProject: Project = {
-      id: generateId(),
-      name: projectName,
-      operator: operator || 'Unknown',
-      company: company || '',
-      date: new Date(),
-      notes: notes || '',
-      images: [],
-      markers: [],
-      regions: [],
-      hasUnsavedChanges: false
-    };
+    setIsLoading(true);
+    try {
+      console.log('[PROJECT_DIALOG] Sending create project request to server...');
 
-    console.log('[PROJECT_DIALOG] Creating new project:', newProject.name);
-    console.log('[PROJECT_DIALOG] This will clear all existing images, markers, and regions');
+      // ارسال درخواست به سرور برای ایجاد پروژه جدید
+      const projectData = {
+        name: projectName,
+        operator: operator || 'Unknown',
+        company: company || '',
+        notes: notes || ''
+      };
 
-    addProject(newProject);
-    setCurrentProject(newProject);
+      // استفاده از API برای ایجاد پروژه
+      const response = await createProject(projectData);
 
-    // Save project name to localStorage for upload
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('currentProjectName', newProject.name);
+      console.log('[PROJECT_DIALOG] Project created successfully on server:', response);
+
+      // پروژه جدید با ID از سرور
+      const newProject: Project = {
+        id: response.id,
+        name: projectName,
+        operator: operator || 'Unknown',
+        company: company || '',
+        date: new Date(response.created_at || new Date()),
+        notes: notes || '',
+        images: [],
+        markers: [],
+        regions: [],
+        hasUnsavedChanges: false
+      };
+
+      console.log('[PROJECT_DIALOG] Adding project to local state and setting as current');
+
+      // Add to local state
+      addProject(newProject);
+
+      // Set as current project
+      setCurrentProject(newProject);
+
+      // Save project name to localStorage for upload
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('currentProjectName', newProject.name);
+      }
+
+      toast.success(t.projectCreated);
+      onOpenChange(false);
+    } catch (error) {
+      console.error('[PROJECT_DIALOG] Error creating project:', error);
+      toast.error(language === 'fa' ? 'خطا در ایجاد پروژه' : 'Error creating project');
+    } finally {
+      setIsLoading(false);
     }
-
-    toast.success(t.projectCreated);
-    onOpenChange(false);
   };
 
   const handleSaveProject = async () => {
@@ -204,6 +234,62 @@ export default function ProjectDialog({
         setIsLoading(false);
       }
     }
+  };
+
+  const handleEditProject = (project: Project) => {
+    setEditingProject(project);
+    setProjectName(project.name);
+    setOperator(project.operator);
+    setCompany(project.company);
+    setNotes(project.notes);
+  };
+
+  const handleUpdateProject = async () => {
+    if (!editingProject) return;
+
+    if (!projectName.trim()) {
+      toast.error(t.enterProjectName);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      console.log('[PROJECT_DIALOG] Updating project:', editingProject.id);
+
+      const updatedProject: Project = {
+        ...editingProject,
+        name: projectName,
+        operator: operator || editingProject.operator,
+        company: company || editingProject.company,
+        notes: notes || editingProject.notes,
+        hasUnsavedChanges: false
+      };
+
+      // بارگذاری پروژه برای دریافت تصاویر و دیگر داده‌ها
+      await loadProjectById(editingProject.id);
+
+      // سپس ذخیره با اطلاعات جدید
+      await saveCurrentProject(updatedProject);
+
+      // بستن حالت ویرایش و بازگشت به لیست
+      setEditingProject(null);
+      await loadAllProjects();
+
+      toast.success(language === 'fa' ? 'پروژه با موفقیت به‌روزرسانی شد' : 'Project updated successfully');
+    } catch (error) {
+      console.error('[PROJECT_DIALOG] Error updating project:', error);
+      toast.error(language === 'fa' ? 'خطا در به‌روزرسانی پروژه' : 'Error updating project');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingProject(null);
+    setProjectName('');
+    setOperator('');
+    setCompany('');
+    setNotes('');
   };
 
   const handleRefreshProjects = async () => {
@@ -305,31 +391,139 @@ export default function ProjectDialog({
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
+              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
                 {t.cancel}
               </Button>
-              <Button onClick={handleCreateProject}>
-                <FolderPlus className="w-4 h-4 mr-2" />
-                {t.newProject}
+              <Button onClick={handleCreateProject} disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    {language === 'fa' ? 'در حال ایجاد...' : 'Creating...'}
+                  </>
+                ) : (
+                  <>
+                    <FolderPlus className="w-4 h-4 mr-2" />
+                    {t.newProject}
+                  </>
+                )}
               </Button>
             </DialogFooter>
           </TabsContent>
 
           {/* تب باز کردن پروژه */}
           <TabsContent value="open" className="mt-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-medium">{language === 'fa' ? 'پروژه‌های موجود' : 'Available Projects'}</h3>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleRefreshProjects}
-                disabled={isLoadingProjects || isLoading}
-              >
-                <RefreshCw className={`w-4 h-4 ${isLoadingProjects ? 'animate-spin' : ''}`} />
-              </Button>
-            </div>
+            {editingProject ? (
+              // فرم ویرایش پروژه
+              <div className="space-y-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-medium">{language === 'fa' ? 'ویرایش پروژه' : 'Edit Project'}</h3>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleCancelEdit}
+                    disabled={isLoading}
+                  >
+                    <X className="w-4 h-4 mr-1" />
+                    {language === 'fa' ? 'لغو' : 'Cancel'}
+                  </Button>
+                </div>
 
-            <ScrollArea className="h-[400px] pr-4">
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-project-name">{t.projectName}</Label>
+                    <Input
+                      id="edit-project-name"
+                      value={projectName}
+                      onChange={(e) => setProjectName(e.target.value)}
+                      disabled={isLoading}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-operator">
+                      <User className="w-4 h-4 inline mr-2" />
+                      {t.operator}
+                    </Label>
+                    <Input
+                      id="edit-operator"
+                      value={operator}
+                      onChange={(e) => setOperator(e.target.value)}
+                      disabled={isLoading}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-company">
+                      <Building2 className="w-4 h-4 inline mr-2" />
+                      {t.company}
+                    </Label>
+                    <Input
+                      id="edit-company"
+                      value={company}
+                      onChange={(e) => setCompany(e.target.value)}
+                      disabled={isLoading}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-notes">{t.notes}</Label>
+                    <Textarea
+                      id="edit-notes"
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      rows={4}
+                      disabled={isLoading}
+                    />
+                  </div>
+
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                    <div className="text-sm">
+                      <div className="font-medium mb-1">{language === 'fa' ? 'اطلاعات پروژه:' : 'Project Info:'}</div>
+                      <div className="text-gray-600 dark:text-gray-400">
+                        • {editingProject.images?.length || 0} {language === 'fa' ? 'تصویر' : 'image(s)'}<br/>
+                        • {editingProject.markers?.length || 0} {language === 'fa' ? 'نشانگر' : 'marker(s)'}<br/>
+                        • {editingProject.regions?.length || 0} {language === 'fa' ? 'ناحیه' : 'region(s)'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={handleCancelEdit} disabled={isLoading}>
+                    <X className="w-4 h-4 mr-1" />
+                    {t.cancel}
+                  </Button>
+                  <Button onClick={handleUpdateProject} disabled={isLoading}>
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        {language === 'fa' ? 'در حال به‌روزرسانی...' : 'Updating...'}
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4 mr-1" />
+                        {language === 'fa' ? 'به‌روزرسانی' : 'Update'}
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              // لیست پروژه‌ها
+              <>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-medium">{language === 'fa' ? 'پروژه‌های موجود' : 'Available Projects'}</h3>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleRefreshProjects}
+                    disabled={isLoadingProjects || isLoading}
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isLoadingProjects ? 'animate-spin' : ''}`} />
+                  </Button>
+                </div>
+
+                <ScrollArea className="h-[400px] pr-4">
               {isLoadingProjects || isLoading ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
@@ -391,6 +585,14 @@ export default function ProjectDialog({
                           </Button>
                           <Button
                             size="sm"
+                            variant="outline"
+                            onClick={() => handleEditProject(project)}
+                            disabled={isLoading}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            size="sm"
                             variant="destructive"
                             onClick={() => handleDeleteProject(project.id, project.name)}
                             disabled={isLoading}
@@ -409,7 +611,9 @@ export default function ProjectDialog({
                   <p className="text-sm">{language === 'fa' ? 'برای شروع یک پروژه جدید ایجاد کنید' : 'Create a new project to get started'}</p>
                 </div>
               )}
-            </ScrollArea>
+                </ScrollArea>
+              </>
+            )}
           </TabsContent>
 
           {/* تب ذخیره پروژه */}

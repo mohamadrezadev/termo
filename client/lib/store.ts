@@ -100,7 +100,7 @@ export interface AppState {
   setCurrentProject: (project: Project | null) => void;
   addProject: (project: Project) => void;
   removeProject: (projectId: string) => Promise<void>;
-  saveCurrentProject: (project: Project) => Promise<void>;
+  saveCurrentProject: (project: Project, isNewProject?: boolean) => Promise<void>;
   loadProjectById: (projectId: string) => Promise<void>;
   loadAllProjects: () => Promise<void>;
   autoSaveProject: () => void;
@@ -349,34 +349,41 @@ export const useAppStore = create<AppState>()(
         }
       },
 
-      saveCurrentProject: async (project) => {
+      saveCurrentProject: async (project, isNewProject = false) => {
         const state = get();
-        
+
         try {
           console.log('[STORE] Saving project...', project.name);
+          console.log('[STORE] Is new project:', isNewProject);
           const result = await saveProjectToAPI(
             project,
             state.images,
             state.markers,
-            state.regions
+            state.regions,
+            isNewProject
           );
-          
+
           if (result.success) {
-            const updatedProjects = state.projects.map(p => 
-              p.id === project.id ? project : p
+            // اگه پروژه جدید بود و سرور ID جدید داد، باید ID رو آپدیت کنیم
+            const finalProject = result.projectId && isNewProject
+              ? { ...project, id: result.projectId, hasUnsavedChanges: false }
+              : { ...project, hasUnsavedChanges: false };
+
+            const updatedProjects = state.projects.map(p =>
+              p.id === project.id ? finalProject : p
             );
-            
-            if (!updatedProjects.find(p => p.id === project.id)) {
-              updatedProjects.push(project);
+
+            if (!updatedProjects.find(p => p.id === finalProject.id)) {
+              updatedProjects.push(finalProject);
             }
 
             set({
               projects: updatedProjects,
-              currentProject: { ...project, hasUnsavedChanges: false }
+              currentProject: finalProject
             });
-            
+
             toast.success('Project saved successfully');
-            console.log('[STORE] Project saved successfully:', result.projectId);
+            console.log('[STORE] Project saved successfully. Project ID:', result.projectId);
           } else {
             toast.error(result.error || 'Failed to save project');
             console.error('[STORE] Error saving project:', result.error);

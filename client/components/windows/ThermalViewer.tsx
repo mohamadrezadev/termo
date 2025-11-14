@@ -12,7 +12,8 @@ import {
   ThermalImage, // For constructing the new image object
   renderThermalCanvas, // Ensure this is imported
   formatTemperature, // For temperature formatting
-  celsiusToFahrenheit // For temperature conversion
+  celsiusToFahrenheit, // For temperature conversion
+  formatTemperatureDual // For dual temperature display (C and F)
 } from '@/lib/thermal-utils';
 import Window from './Window';
 // import ThermalImageRenderer from './ThermalImageRenderer'; // Import the new component
@@ -413,6 +414,19 @@ export default function ThermalViewer() {
     };
     input.click();
   }, [handleFileUpload]);
+
+  // Listen for upload events from TopMenuBar
+  useEffect(() => {
+    const handleUploadEvent = () => {
+      console.log('[THERMAL_VIEWER] Received upload event from TopMenuBar');
+      handleFileSelect();
+    };
+
+    window.addEventListener('thermalViewerUpload', handleUploadEvent);
+    return () => {
+      window.removeEventListener('thermalViewerUpload', handleUploadEvent);
+    };
+  }, [handleFileSelect]);
 
   // Combined event handler for container (panning, and initial drawing clicks)
   const handleContainerMouseMove = useCallback((e: React.MouseEvent) => {
@@ -1108,7 +1122,7 @@ export default function ThermalViewer() {
         <div className="h-6 bg-gray-750 border-t border-gray-600 flex items-center justify-between px-2 text-xs text-gray-400">
           <div className="flex items-center space-x-4">
             {currentTemp !== null && activeImage?.thermalData && ( // Only show temp if there's an image
-              <span>{t.temperature}: {currentTemp.toFixed(1)}°C</span>
+              <span>{t.temperature}: {formatTemperatureDual(currentTemp)}</span>
             )}
             {activeImage?.thermalData && ( // Only show coords if there's an image
               <span>X: {Math.round(mousePos.x)}, Y: {Math.round(mousePos.y)}</span>
@@ -1121,8 +1135,8 @@ export default function ThermalViewer() {
             <span>{t.palette}: {palette?.name}</span>
             {activeImage?.thermalData && (
               <span>
-                Min: {(customMinTemp ?? activeImage.thermalData.minTemp).toFixed(1)}°C -
-                Max: {(customMaxTemp ?? activeImage.thermalData.maxTemp).toFixed(1)}°C
+                Min: {formatTemperatureDual(customMinTemp ?? activeImage.thermalData.minTemp)} -
+                Max: {formatTemperatureDual(customMaxTemp ?? activeImage.thermalData.maxTemp)}
               </span>
             )}
           </div>

@@ -25,6 +25,11 @@ class FileManager:
         # Temporary directory
         self.temp_dir = Path(tempfile.gettempdir()) / "thermal_analyzer_temp"
         self.temp_dir.mkdir(exist_ok=True)
+        
+        self.base_dir = Path("projects")
+
+        if not self.base_dir.exists():
+            self.base_dir.mkdir(parents=True, exist_ok=True)
 
     @staticmethod
     def sanitize_folder_name(name: str) -> str:
@@ -54,7 +59,28 @@ class FileManager:
         """
         return self.projects_dir / project_identifier
 
-    def create_project_directories(self, project_id: str) -> None:
+    def create_project_directories(self, project_id: str):
+        """Creates the folder structure for a project"""
+
+        try:
+            project_dir = self.base_dir / project_id
+            images_dir = project_dir / "images"
+            reports_dir = project_dir / "reports"
+
+            project_dir.mkdir(parents=True, exist_ok=True)
+            images_dir.mkdir(exist_ok=True)
+            reports_dir.mkdir(exist_ok=True)
+
+            return {
+                "project": project_dir,
+                "images": images_dir,
+                "reports": reports_dir
+            }
+
+        except Exception as e:
+            print("Error creating directories:", e)
+            return None   
+    def create_project_directories1(self, project_id: str) -> None:
         """
         Create directory structure for a new project:
         projects/<project_id>/

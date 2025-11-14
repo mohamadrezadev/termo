@@ -2,6 +2,7 @@
 
 import { useAppStore } from '@/lib/store';
 import { translations } from '@/lib/translations';
+import { formatTemperatureDual } from '@/lib/thermal-utils';
 import Window from './Window';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -150,7 +151,7 @@ export default function DataTable() {
                     {marker.x.toFixed(1)}, {marker.y.toFixed(1)}
                   </TableCell>
                   <TableCell>
-                    {marker.temperature.toFixed(1)}°C
+                    {formatTemperatureDual(marker.temperature)}
                   </TableCell>
                   <TableCell>
                     <Input
@@ -197,12 +198,12 @@ export default function DataTable() {
                   </TableCell>
                   <TableCell>
                     <div className="text-xs">
-                      <div>Avg: {region.avgTemp.toFixed(1)}°C</div>
+                      <div>Avg: {formatTemperatureDual(region.avgTemp)}</div>
                       <div className="text-gray-400">
-                        Min: {region.minTemp.toFixed(1)}°C
+                        Min: {formatTemperatureDual(region.minTemp)}
                       </div>
                       <div className="text-gray-400">
-                        Max: {region.maxTemp.toFixed(1)}°C
+                        Max: {formatTemperatureDual(region.maxTemp)}
                       </div>
                     </div>
                   </TableCell>

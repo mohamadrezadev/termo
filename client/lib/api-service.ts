@@ -70,7 +70,7 @@ export async function createProject(projectData: {
   notes?: string;
 }): Promise<any> {
   try {
-    const response = await apiClient.post('/', projectData);
+    const response = await apiClient.post('/projects', projectData);
     return response.data;
   } catch (error) {
     handleError(error, 'Create project');
@@ -458,5 +458,54 @@ export async function bulkSaveProject(
     return response.data;
   } catch (error) {
     handleError(error, 'Bulk save project');
+  }
+}
+
+// ==================== Report Generation API ====================
+
+/**
+ * تولید گزارش PDF یا DOCX
+ * Generate PDF or DOCX report
+ */
+export async function generateReport(requestData: {
+  projectId: string;
+  projectName: string;
+  operator: string;
+  company: string;
+  settings: any;
+  images: Array<{
+    id: string;
+    name: string;
+    thermalBase64?: string;
+    realBase64?: string;
+  }>;
+  markers: Array<{
+    id: string;
+    imageId: string;
+    label: string;
+    x: number;
+    y: number;
+    temperature: number;
+  }>;
+  regions: Array<{
+    id: string;
+    imageId: string;
+    label: string;
+    type: string;
+    points: Array<{ x: number; y: number }>;
+    minTemp: number;
+    maxTemp: number;
+    avgTemp: number;
+  }>;
+  globalParameters: any;
+  format: 'pdf' | 'docx';
+}): Promise<Blob> {
+  try {
+    const response = await apiClient.post('/reports/generate', requestData, {
+      responseType: 'blob'
+    });
+    return response.data;
+  } catch (error) {
+    handleError(error, 'Generate report');
   }
 }
