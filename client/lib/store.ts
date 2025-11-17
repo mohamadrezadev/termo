@@ -81,6 +81,7 @@ export interface AppState {
   nextZIndex: number;
   gridCols: number;
   gridRows: number;
+  layoutMode: 'grid' | 'floating';
   
   // Measurement Parameters
   globalParameters: ThermalMetadata;
@@ -99,9 +100,6 @@ export interface AppState {
   toggleFullscreen: () => void;
   setCurrentProject: (project: Project | null) => void;
   addProject: (project: Project) => void;
-  deleteProject: (projectId: string) => Promise<void>;
-  loadProjects: () => Promise<void>;
-  autoSaveProject: () => void;
   saveProjectSnapshot: () => Promise<boolean>;
   loadProjectSnapshot: (projectId: string) => Promise<Project | null>;
   removeProject: (projectId: string) => Promise<void>;
@@ -134,6 +132,7 @@ export interface AppState {
   updateGlobalParameters: (params: Partial<ThermalMetadata>) => void;
   clearAll: () => void;
   calculateGridLayout: () => void;
+  setLayoutMode: (mode: 'grid' | 'floating') => void;
   setTemplates: (templates: Template[]) => void;
   addTemplate: (template: Template) => void;
   removeTemplate: (templateId: string) => void;
@@ -150,6 +149,30 @@ function calculateOptimalGrid(windowCount: number): { cols: number; rows: number
   if (windowCount <= 6) return { cols: 3, rows: 2 };
   if (windowCount <= 9) return { cols: 3, rows: 3 };
   return { cols: 4, rows: Math.ceil(windowCount / 4) };
+}
+
+// Helper function to collect complete state for persistence
+function collectStateData(state: AppState) {
+  return {
+    activeImageId: state.activeImageId,
+    currentPalette: state.currentPalette,
+    customMinTemp: state.customMinTemp,
+    customMaxTemp: state.customMaxTemp,
+    globalParameters: state.globalParameters,
+    displaySettings: {
+      thermalView: state.thermalView,
+      realView: state.realView,
+      showGrid: state.showGrid,
+      showMarkers: state.showMarkers,
+      showRegions: state.showRegions,
+      showTemperatureScale: state.showTemperatureScale
+    },
+    windowLayout: {
+      windows: state.windows,
+      gridCols: state.gridCols,
+      gridRows: state.gridRows
+    }
+  };
 }
 
 // Calculate window positions based on grid
@@ -286,6 +309,7 @@ export const useAppStore = create<AppState>()(
       nextZIndex: 8,
       gridCols: 3,
       gridRows: 2,
+      layoutMode: 'grid',
       globalParameters: {
         emissivity: 0.95,
         ambientTemp: 20,
@@ -359,14 +383,19 @@ export const useAppStore = create<AppState>()(
         const state = get();
 
         try {
-          console.log('[STORE] Saving project...', project.name);
+          console.log('[STORE] Saving project with complete state...', project.name);
           console.log('[STORE] Is new project:', isNewProject);
+          
+          // Collect complete state data
+          const stateData = collectStateData(state);
+          
           const result = await saveProjectToAPI(
             project,
             state.images,
             state.markers,
             state.regions,
-            isNewProject
+            isNewProject,
+            stateData
           );
 
           if (result.success) {
@@ -402,23 +431,54 @@ export const useAppStore = create<AppState>()(
 
       loadProjectById: async (projectId: string) => {
         try {
-          console.log('[STORE] Loading project:', projectId);
+          console.log('[STORE] Loading project with complete state:', projectId);
           const result = await loadProjectFromAPI(projectId);
           
           if (result.success && result.data) {
-            const { project, images, markers, regions } = result.data;
+            const { project, images, markers, regions, stateData } = result.data;
             
             console.log('[STORE] Project loaded from API');
             console.log('[STORE] Images:', images.length);
             console.log('[STORE] Markers:', markers.length);
             console.log('[STORE] Regions:', regions.length);
+            console.log('[STORE] State data:', stateData);
             
+            // Restore complete state
             set({
               currentProject: project,
               images: images,
               markers: markers,
               regions: regions,
-              activeImageId: images[0]?.id || null
+              activeImageId: stateData?.activeImageId || images[0]?.id || null,
+              currentPalette: stateData?.currentPalette || 'iron',
+              customMinTemp: stateData?.customMinTemp || null,
+              customMaxTemp: stateData?.customMaxTemp || null,
+              globalParameters: stateData?.globalParameters || {
+                emissivity: 0.95,
+                ambientTemp: 20,
+                reflectedTemp: 20,
+                humidity: 0.5,
+                distance: 1.0
+              },
+              // Restore display settings
+              thermalView: stateData?.displaySettings?.thermalView || {
+                zoom: 1,
+                panX: 0,
+                panY: 0
+              },
+              realView: stateData?.displaySettings?.realView || {
+                zoom: 1,
+                panX: 0,
+                panY: 0
+              },
+              showGrid: stateData?.displaySettings?.showGrid ?? false,
+              showMarkers: stateData?.displaySettings?.showMarkers ?? true,
+              showRegions: stateData?.displaySettings?.showRegions ?? true,
+              showTemperatureScale: stateData?.displaySettings?.showTemperatureScale ?? true,
+              // Restore window layout
+              windows: stateData?.windowLayout?.windows || get().windows,
+              gridCols: stateData?.windowLayout?.gridCols || 3,
+              gridRows: stateData?.windowLayout?.gridRows || 2,
             });
             
             toast.success('Project loaded successfully');
@@ -441,18 +501,29 @@ export const useAppStore = create<AppState>()(
           console.log('[STORE] Loaded projects:', projects.length);
           
           // تبدیل پروژه‌های سریالایز شده به Project objects
-          const convertedProjects: Project[] = projects.map(p => ({
-            id: p.id,
-            name: p.name,
-            operator: p.operator,
-            company: p.company,
-            date: new Date(p.date),
-            notes: p.notes,
-            images: [],
-            markers: [],
-            regions: [],
-            hasUnsavedChanges: false
-          }));
+          const convertedProjects: Project[] = projects.map(p => {
+            // Ensure valid date
+            let projectDate = new Date();
+            if (p.date) {
+              const parsedDate = new Date(p.date);
+              if (!isNaN(parsedDate.getTime())) {
+                projectDate = parsedDate;
+              }
+            }
+            
+            return {
+              id: p.id,
+              name: p.name,
+              operator: p.operator,
+              company: p.company,
+              date: projectDate,
+              notes: p.notes,
+              images: [],
+              markers: [],
+              regions: [],
+              hasUnsavedChanges: false
+            };
+          });
           
           set({ 
             projects: convertedProjects,
@@ -470,12 +541,14 @@ export const useAppStore = create<AppState>()(
       autoSaveProject: () => {
         const state = get();
         if (state.currentProject) {
-          console.log('[STORE] Scheduling auto-save...');
+          console.log('[STORE] Scheduling auto-save with complete state...');
+          const stateData = collectStateData(state);
           scheduleAutoSave(
             state.currentProject,
             state.images,
             state.markers,
-            state.regions
+            state.regions,
+            stateData
           );
         }
       },
@@ -522,6 +595,7 @@ export const useAppStore = create<AppState>()(
             toast.success('Project saved successfully');
             return true;
           }
+          return false;
         } catch (error) {
           console.error('[STORE] Failed to save project:', error);
           toast.error('Failed to save project');
@@ -540,12 +614,21 @@ export const useAppStore = create<AppState>()(
           if (result && result.project) {
             const projectData = result.project;
             
+            // Ensure we have a valid date
+            let projectDate = new Date();
+            if (projectData.createdAt) {
+              const parsedDate = new Date(projectData.createdAt);
+              if (!isNaN(parsedDate.getTime())) {
+                projectDate = parsedDate;
+              }
+            }
+            
             const loadedProject: Project = {
               id: projectData.id,
               name: projectData.name,
               operator: projectData.operator || '',
               company: projectData.company || '',
-              date: new Date(projectData.createdAt),
+              date: projectDate,
               notes: projectData.description || '',
               images: projectData.images || [],
               markers: projectData.markers || [],
@@ -562,12 +645,19 @@ export const useAppStore = create<AppState>()(
               currentPalette: projectData.currentPalette || 'iron',
               customMinTemp: projectData.customMinTemp,
               customMaxTemp: projectData.customMaxTemp,
-              globalParameters: projectData.parameters || {}
+              globalParameters: projectData.parameters as ThermalMetadata || {
+                emissivity: 0.95,
+                ambientTemp: 20,
+                reflectedTemp: 20,
+                humidity: 0.5,
+                distance: 1.0
+              }
             });
 
             toast.success(`Project "${loadedProject.name}" loaded successfully`);
             return loadedProject;
           }
+          return null;
         } catch (error) {
           console.error('[STORE] Failed to load project:', error);
           toast.error('Failed to load project');
@@ -603,7 +693,8 @@ export const useAppStore = create<AppState>()(
         
         // Auto-save after adding image
         if (updatedProject) {
-          scheduleAutoSave(updatedProject, newImages, state.markers, state.regions);
+          const stateData = collectStateData({ ...state, images: newImages });
+          scheduleAutoSave(updatedProject, newImages, state.markers, state.regions, stateData);
         }
       },
 
@@ -630,7 +721,8 @@ export const useAppStore = create<AppState>()(
         set({ images: newImages, currentProject: updatedProject });
 
         if (updatedProject) {
-          scheduleAutoSave(updatedProject, newImages, state.markers, state.regions);
+          const stateData = collectStateData({ ...state, images: newImages });
+          scheduleAutoSave(updatedProject, newImages, state.markers, state.regions, stateData);
         }
       },
 
@@ -672,13 +764,12 @@ export const useAppStore = create<AppState>()(
           regions: state.regions.filter(region => region.imageId !== imageId),
           currentProject: updatedProject
         });
-        
-        if (updatedProject) {
-          scheduleAutoSave(updatedProject, newImages, state.markers, state.regions);
-        }
-      },
 
-      addMarker: (marker) => {
+        if (updatedProject) {
+          const stateData = collectStateData({ ...state, images: newImages });
+          scheduleAutoSave(updatedProject, newImages, state.markers, state.regions, stateData);
+        }
+      },      addMarker: (marker) => {
         const state = get();
         const newMarkers = [...state.markers, marker];
         const updatedProject = state.currentProject ? {
@@ -693,7 +784,8 @@ export const useAppStore = create<AppState>()(
         });
         
         if (updatedProject) {
-          scheduleAutoSave(updatedProject, state.images, newMarkers, state.regions);
+          const stateData = collectStateData({ ...state, markers: newMarkers });
+          scheduleAutoSave(updatedProject, state.images, newMarkers, state.regions, stateData);
         }
       },
 
@@ -714,7 +806,8 @@ export const useAppStore = create<AppState>()(
         });
 
         if (updatedProject) {
-          scheduleAutoSave(updatedProject, state.images, newMarkers, state.regions);
+          const stateData = collectStateData({ ...state, markers: newMarkers });
+          scheduleAutoSave(updatedProject, state.images, newMarkers, state.regions, stateData);
         }
       },
 
@@ -733,7 +826,8 @@ export const useAppStore = create<AppState>()(
         });
 
         if (updatedProject) {
-          scheduleAutoSave(updatedProject, state.images, newMarkers, state.regions);
+          const stateData = collectStateData({ ...state, markers: newMarkers });
+          scheduleAutoSave(updatedProject, state.images, newMarkers, state.regions, stateData);
         }
       },
 
@@ -752,7 +846,8 @@ export const useAppStore = create<AppState>()(
         });
         
         if (updatedProject) {
-          scheduleAutoSave(updatedProject, state.images, state.markers, newRegions);
+          const stateData = collectStateData({ ...state, regions: newRegions });
+          scheduleAutoSave(updatedProject, state.images, state.markers, newRegions, stateData);
         }
       },
 
@@ -773,7 +868,8 @@ export const useAppStore = create<AppState>()(
         });
 
         if (updatedProject) {
-          scheduleAutoSave(updatedProject, state.images, state.markers, newRegions);
+          const stateData = collectStateData({ ...state, regions: newRegions });
+          scheduleAutoSave(updatedProject, state.images, state.markers, newRegions, stateData);
         }
       },
 
@@ -792,7 +888,8 @@ export const useAppStore = create<AppState>()(
         });
 
         if (updatedProject) {
-          scheduleAutoSave(updatedProject, state.images, state.markers, newRegions);
+          const stateData = collectStateData({ ...state, regions: newRegions });
+          scheduleAutoSave(updatedProject, state.images, state.markers, newRegions, stateData);
         }
       },
 
@@ -865,6 +962,8 @@ export const useAppStore = create<AppState>()(
         const gridLayoutWindows = calculateWindowPositions(state.windows);
         return { windows: gridLayoutWindows };
       }),
+
+      setLayoutMode: (mode) => set({ layoutMode: mode }),
 
       updateGlobalParameters: (params) => set((state) => ({
         globalParameters: { ...state.globalParameters, ...params }

@@ -139,7 +139,7 @@ export async function updateProject(
   }>
 ): Promise<any> {
   try {
-    const response = await apiClient.put(`/${projectId}`, projectData);
+    const response = await apiClient.put(`/projects/${projectId}`, projectData);
     return response.data;
   } catch (error) {
     handleError(error, `Update project ${projectId}`);
@@ -162,7 +162,7 @@ export async function createImage(
   }
 ): Promise<any> {
   try {
-    const response = await apiClient.post(`/${projectId}/images`, imageData);
+    const response = await apiClient.post(`/projects/${projectId}/images`, imageData);
     return response.data;
   } catch (error) {
     handleError(error, `Create image for project ${projectId}`);
@@ -175,7 +175,7 @@ export async function createImage(
  */
 export async function getImages(projectId: string): Promise<any[]> {
   try {
-    const response = await apiClient.get(`/${projectId}/images`);
+    const response = await apiClient.get(`/projects/${projectId}/images`);
     return response.data;
   } catch (error) {
     handleError(error, `Get images for project ${projectId}`);
@@ -188,7 +188,7 @@ export async function getImages(projectId: string): Promise<any[]> {
  */
 export async function getImage(imageId: string): Promise<any> {
   try {
-    const response = await apiClient.get(`/images/${imageId}`);
+    const response = await apiClient.get(`/projects/images/${imageId}`);
     return response.data;
   } catch (error) {
     handleError(error, `Get image ${imageId}`);
@@ -209,7 +209,7 @@ export async function updateImage(
   }>
 ): Promise<any> {
   try {
-    const response = await apiClient.put(`/images/${imageId}`, imageData);
+    const response = await apiClient.put(`/projects/images/${imageId}`, imageData);
     return response.data;
   } catch (error) {
     handleError(error, `Update image ${imageId}`);
@@ -222,7 +222,7 @@ export async function updateImage(
  */
 export async function deleteImage(imageId: string): Promise<void> {
   try {
-    await apiClient.delete(`/images/${imageId}`);
+    await apiClient.delete(`/projects/images/${imageId}`);
   } catch (error) {
     handleError(error, `Delete image ${imageId}`);
   }
@@ -245,7 +245,7 @@ export async function createMarker(
   }
 ): Promise<any> {
   try {
-    const response = await apiClient.post(`/images/${imageId}/markers`, markerData);
+    const response = await apiClient.post(`/markers`, { ...markerData, image_id: imageId });
     return response.data;
   } catch (error) {
     handleError(error, `Create marker for image ${imageId}`);
@@ -258,7 +258,7 @@ export async function createMarker(
  */
 export async function getMarkers(imageId: string): Promise<any[]> {
   try {
-    const response = await apiClient.get(`/images/${imageId}/markers`);
+    const response = await apiClient.get(`/markers/image/${imageId}`);
     return response.data;
   } catch (error) {
     handleError(error, `Get markers for image ${imageId}`);
@@ -293,7 +293,7 @@ export async function updateMarker(
   }>
 ): Promise<any> {
   try {
-    const response = await apiClient.put(`/markers/${markerId}`, markerData);
+    const response = await apiClient.patch(`/markers/${markerId}`, markerData);
     return response.data;
   } catch (error) {
     handleError(error, `Update marker ${markerId}`);
@@ -331,7 +331,7 @@ export async function createRegion(
   }
 ): Promise<any> {
   try {
-    const response = await apiClient.post(`/images/${imageId}/regions`, regionData);
+    const response = await apiClient.post(`/regions`, { ...regionData, image_id: imageId });
     return response.data;
   } catch (error) {
     handleError(error, `Create region for image ${imageId}`);
@@ -344,7 +344,7 @@ export async function createRegion(
  */
 export async function getRegions(imageId: string): Promise<any[]> {
   try {
-    const response = await apiClient.get(`/images/${imageId}/regions`);
+    const response = await apiClient.get(`/regions/image/${imageId}`);
     return response.data;
   } catch (error) {
     handleError(error, `Get regions for image ${imageId}`);
@@ -381,7 +381,7 @@ export async function updateRegion(
   }>
 ): Promise<any> {
   try {
-    const response = await apiClient.put(`/regions/${regionId}`, regionData);
+    const response = await apiClient.patch(`/regions/${regionId}`, regionData);
     return response.data;
   } catch (error) {
     handleError(error, `Update region ${regionId}`);
@@ -404,7 +404,7 @@ export async function deleteRegion(regionId: string): Promise<void> {
 
 /**
  * تمام داده‌های پروژه را یک‌باره ذخیره کن
- * Bulk save all project data at once
+ * Bulk save all project data at once with complete state persistence
  */
 export async function bulkSaveProject(
   projectId: string | null,
@@ -440,16 +440,39 @@ export async function bulkSaveProject(
     max_temp?: number;
     avg_temp?: number;
     notes?: string;
-  }>
+  }>,
+  // State persistence parameters
+  stateData?: {
+    active_image_id?: string;
+    current_palette?: string;
+    custom_min_temp?: number | null;
+    custom_max_temp?: number | null;
+    global_parameters?: any;
+    display_settings?: any;
+    window_layout?: any;
+  }
 ): Promise<any> {
   try {
-    const url = projectId ? `/${projectId}/bulk-save` : '/null/bulk-save';
-
-    const response = await apiClient.post(url, {
-      project: projectData,
+    // استفاده از endpoint bulk-save
+    const effectiveProjectId = projectId || 'null';
+    const response = await apiClient.post(`/projects/${effectiveProjectId}/bulk-save`, {
+      project: {
+        name: projectData.name,
+        operator: projectData.operator || '',
+        company: projectData.company || '',
+        notes: projectData.notes || '',
+      },
       images,
       markers,
       regions,
+      // State persistence fields
+      active_image_id: stateData?.active_image_id,
+      current_palette: stateData?.current_palette || 'iron',
+      custom_min_temp: stateData?.custom_min_temp,
+      custom_max_temp: stateData?.custom_max_temp,
+      global_parameters: stateData?.global_parameters,
+      display_settings: stateData?.display_settings,
+      window_layout: stateData?.window_layout,
     });
 
     return response.data;
@@ -508,6 +531,53 @@ export async function generateReport(requestData: {
 }
 
 /**
+ * تولید گزارش دو زبانه (فارسی و انگلیسی) به صورت ZIP
+ * Generate bilingual report (Persian and English) as ZIP
+ */
+export async function generateBilingualReport(requestData: {
+  projectId: string;
+  projectName: string;
+  operator: string;
+  company: string;
+  settings: any;
+  images: Array<{
+    id: string;
+    name: string;
+    thermalBase64?: string;
+    realBase64?: string;
+  }>;
+  markers: Array<{
+    id: string;
+    imageId: string;
+    label: string;
+    x: number;
+    y: number;
+    temperature: number;
+  }>;
+  regions: Array<{
+    id: string;
+    imageId: string;
+    label: string;
+    type: string;
+    points: Array<{ x: number; y: number }>;
+    minTemp: number;
+    maxTemp: number;
+    avgTemp: number;
+  }>;
+  globalParameters: any;
+  format: 'pdf' | 'docx';
+}): Promise<Blob> {
+  try {
+    const response = await apiClient.post('/reports/generate-bilingual', requestData, {
+      responseType: 'blob'
+    });
+    return response.data;
+  } catch (error) {
+    handleError(error, 'Generate bilingual report');
+  }
+}
+
+/**
  * تغییر پالت رنگی تصویر حرارتی
  * Change thermal image color palette
  */
@@ -542,7 +612,7 @@ export async function rerenderPalette(
  */
 export async function saveProject(projectData: ProjectPayload): Promise<SaveProjectResponse> {
   try {
-    const response = await apiClient.post('/project/save', {
+    const response = await apiClient.post('/projects', {
       id: projectData.id,
       name: projectData.name,
       description: projectData.description || projectData.parameters?.timestamp?.toString() || '',
@@ -571,10 +641,18 @@ export async function saveProject(projectData: ProjectPayload): Promise<SaveProj
  */
 export async function loadProject(projectId: string): Promise<LoadProjectResponse> {
   try {
-    const response = await apiClient.get(`/project/load/${projectId}`);
+    const response = await apiClient.get(`/projects/load/${projectId}`);
     
     console.log('[API] Project loaded successfully:', response.data);
-    return response.data;
+    // بکند پروژه را در response.data.project برمی‌گرداند
+    if (response.data.project) {
+      return response.data;
+    }
+    // اگر فرمت متفاوت بود، به فرمت مورد انتظار تبدیل کن
+    return { 
+      status: 'success',
+      project: response.data 
+    };
   } catch (error) {
     handleError(error, 'Load project');
   }
@@ -586,10 +664,19 @@ export async function loadProject(projectId: string): Promise<LoadProjectRespons
  */
 export async function listProjects(): Promise<ListProjectsResponse> {
   try {
-    const response = await apiClient.get('/project/list');
+    const response = await apiClient.get('/projects');
     
     console.log('[API] Projects list retrieved:', response.data);
-    return response.data;
+    // بکند لیست را در response.data.projects برمی‌گرداند
+    if (response.data.projects) {
+      return response.data;
+    }
+    // اگر فرمت متفاوت بود، به فرمت مورد انتظار تبدیل کن
+    return { 
+      status: 'success',
+      projects: Array.isArray(response.data) ? response.data : [],
+      count: Array.isArray(response.data) ? response.data.length : 0
+    };
   } catch (error) {
     handleError(error, 'List projects');
   }
@@ -601,7 +688,7 @@ export async function listProjects(): Promise<ListProjectsResponse> {
  */
 export async function deleteProject(projectId: string): Promise<DeleteProjectResponse> {
   try {
-    const response = await apiClient.delete(`/project/delete/${projectId}`);
+    const response = await apiClient.delete(`/projects/delete/${projectId}`);
     
     console.log('[API] Project deleted:', response.data);
     return response.data;

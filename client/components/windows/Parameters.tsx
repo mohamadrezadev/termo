@@ -143,6 +143,17 @@ export default function Parameters() {
 
           <div className="space-y-3">
             <div className="space-y-1">
+              <Label className="text-xs">{language === 'fa' ? 'مدل دوربین' : 'Camera Model'}</Label>
+              <Input
+                type="text"
+                value={globalParameters.cameraModel || ''}
+                onChange={(e) => updateGlobalParameters({ cameraModel: e.target.value })}
+                className="h-8 text-sm"
+                placeholder={language === 'fa' ? 'مثال: testo 882' : 'e.g., testo 882'}
+              />
+            </div>
+
+            <div className="space-y-1">
               <Label className="text-xs">{t.emissivity}</Label>
               <div className="space-y-2">
                 <Slider

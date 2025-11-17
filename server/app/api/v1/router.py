@@ -13,7 +13,7 @@ api_router = APIRouter()
 
 api_router.include_router(
     projects.router,
-    prefix="/project",
+    prefix="/projects",
     tags=["projects"]
 )
 

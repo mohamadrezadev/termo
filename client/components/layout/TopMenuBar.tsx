@@ -29,7 +29,9 @@ import {
   BookTemplate,
   FolderPlus,
   Maximize2,
-  Minimize2
+  Minimize2,
+  LayoutGrid,
+  Layers
 } from 'lucide-react';
 import TemplateManager from '@/components/dialogs/TemplateManager';
 import ProjectDialog from '@/components/dialogs/ProjectDialog';
@@ -49,7 +51,9 @@ export default function TopMenuBar() {
     addImage,
     setActiveImage,
     saveProjectSnapshot,
-    loadProjectSnapshot
+    loadProjectSnapshot,
+    layoutMode,
+    setLayoutMode
   } = useAppStore();
   const t = translations[language];
 
@@ -227,6 +231,10 @@ export default function TopMenuBar() {
                 </DropdownMenuItem>
               ))}
               <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setLayoutMode(layoutMode === 'grid' ? 'floating' : 'grid')}>
+                {layoutMode === 'grid' ? <Layers className="w-4 h-4 mr-2" /> : <LayoutGrid className="w-4 h-4 mr-2" />}
+                {layoutMode === 'grid' ? 'Floating Mode' : 'Grid Mode'}
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={handleAutoArrange}>
                 <Grid3X3 className="w-4 h-4 mr-2" />
                 Auto Arrange

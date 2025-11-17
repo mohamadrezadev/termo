@@ -145,6 +145,21 @@ async def bulk_save_project(
             company=data.project.company,
             notes=data.project.notes
         )
+        
+        # Set state persistence fields for new project
+        if data.active_image_id:
+            try:
+                project.active_image_id = UUID(data.active_image_id)
+            except (ValueError, AttributeError):
+                pass
+        
+        project.current_palette = data.current_palette or "iron"
+        project.custom_min_temp = data.custom_min_temp
+        project.custom_max_temp = data.custom_max_temp
+        project.global_parameters = data.global_parameters
+        project.display_settings = data.display_settings
+        project.window_layout = data.window_layout
+        
         db.add(project)
         db.commit()
         db.refresh(project)
@@ -175,6 +190,21 @@ async def bulk_save_project(
         project.company = data.project.company
         project.notes = data.project.notes
         project.has_unsaved_changes = False
+        
+        # Update state persistence fields
+        if data.active_image_id:
+            try:
+                project.active_image_id = UUID(data.active_image_id)
+            except (ValueError, AttributeError):
+                project.active_image_id = None
+        
+        project.current_palette = data.current_palette or "iron"
+        project.custom_min_temp = data.custom_min_temp
+        project.custom_max_temp = data.custom_max_temp
+        project.global_parameters = data.global_parameters
+        project.display_settings = data.display_settings
+        project.window_layout = data.window_layout
+        
         from datetime import datetime
         project.updated_at = datetime.utcnow()
 

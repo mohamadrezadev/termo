@@ -8,5 +8,6 @@ server/extracted_images/
 server/dist/
 server/build/
 projects/
+offline_packages/
 
 .env

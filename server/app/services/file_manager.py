@@ -60,52 +60,57 @@ class FileManager:
         return self.projects_dir / project_identifier
 
     def create_project_directories(self, project_id: str):
-        """Creates the folder structure for a project"""
-
-        try:
-            project_dir = self.base_dir / project_id
-            images_dir = project_dir / "images"
-            reports_dir = project_dir / "reports"
-
-            project_dir.mkdir(parents=True, exist_ok=True)
-            images_dir.mkdir(exist_ok=True)
-            reports_dir.mkdir(exist_ok=True)
-
-            return {
-                "project": project_dir,
-                "images": images_dir,
-                "reports": reports_dir
-            }
-
-        except Exception as e:
-            print("Error creating directories:", e)
-            return None   
-    def create_project_directories1(self, project_id: str) -> None:
         """
         Create directory structure for a new project:
         projects/<project_id>/
-            ├── thermal/      # Processed thermal images
+            ├── images/       # Processed images
+            ├── reports/      # Generated reports
+            ├── thermal/      # Thermal images
             ├── real/         # Real images
             ├── csv/          # Temperature CSV files
-            ├── reports/      # Generated reports
             └── uploads/      # Original uploaded files
+        Returns dict with paths to all directories
         """
-        project_dir = self.get_project_dir(project_id)
-        
-        subdirs = ["thermal", "real", "csv", "reports", "uploads"]
-        for subdir in subdirs:
-            (project_dir / subdir).mkdir(parents=True, exist_ok=True)
+        try:
+            # Use both base_dir and projects_dir for compatibility
+            project_dir = self.base_dir / project_id
+            project_dir_alt = self.projects_dir / project_id
+            
+            # Create main project directories
+            for pd in [project_dir, project_dir_alt]:
+                pd.mkdir(parents=True, exist_ok=True)
+            
+            # Create subdirectories
+            subdirs = ["images", "reports", "thermal", "real", "csv", "uploads"]
+            paths = {}
+            
+            for subdir in subdirs:
+                dir_path = project_dir / subdir
+                dir_path.mkdir(exist_ok=True)
+                paths[subdir] = dir_path
+                
+                # Also create in alt location
+                (project_dir_alt / subdir).mkdir(exist_ok=True)
 
-        # Create metadata file
-        metadata_path = project_dir / "metadata.json"
-        if not metadata_path.exists():
-            import json
-            metadata = {
-                "created_at": datetime.utcnow().isoformat(),
-                "project_id": project_id
-            }
-            with open(metadata_path, 'w') as f:
-                json.dump(metadata, f, indent=2)
+            # Create metadata file if not exists
+            metadata_path = project_dir / "metadata.json"
+            if not metadata_path.exists():
+                import json
+                metadata = {
+                    "created_at": datetime.utcnow().isoformat(),
+                    "project_id": project_id
+                }
+                with open(metadata_path, 'w', encoding='utf-8') as f:
+                    json.dump(metadata, f, indent=2, ensure_ascii=False)
+            
+            paths["project"] = project_dir
+            return paths
+
+        except Exception as e:
+            print(f"Error creating directories: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
 
     def save_temp_file(self, upload_file) -> str:
         """

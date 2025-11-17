@@ -8,13 +8,13 @@ from app.db.persistence import init_db, save_project, load_project, list_project
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/project", tags=["projects"])
+router = APIRouter()
 
 # Initialize database on startup
 init_db()
 
 
-@router.post("/save")
+@router.post("/")
 async def save_project_endpoint(project: Dict[str, Any]):
     """
     Save project with all thermal analysis data
@@ -99,7 +99,7 @@ async def load_project_endpoint(project_id: str):
         )
 
 
-@router.get("/list")
+@router.get("/")
 async def list_projects_endpoint():
     """
     List all saved projects

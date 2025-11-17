@@ -15,7 +15,7 @@
 .vscode/
 dist_electron/
 dist_backend_temp/
-
+dist_build/
 # production
 /build
 

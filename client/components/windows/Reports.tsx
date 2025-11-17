@@ -30,7 +30,7 @@ import {
 import { toast } from 'sonner';
 import { ReportSettings, ImageData } from '@/lib/report-generator';
 import { saveAs } from 'file-saver';
-import { generateReport } from '@/lib/api-service';
+import { generateReport, generateBilingualReport } from '@/lib/api-service';
 
 type WizardStep = 'settings' | 'sections' | 'content' | 'preview';
 
@@ -172,7 +172,8 @@ export default function ReportWizard() {
         id: img.id,
         name: img.name,
         thermalBase64: imagesBase64[`${img.id}_thermal`] || imagesBase64[`${img.id}_server`],
-        realBase64: imagesBase64[img.id]
+        realBase64: imagesBase64[img.id],
+        csvUrl: img.csvUrl // Add CSV URL for histogram
       }));
 
       // Prepare markers data
@@ -198,7 +199,7 @@ export default function ReportWizard() {
       }));
 
       // Call API to generate report
-      const blob = await generateReport({
+      const requestPayload = {
         projectId: currentProject.id,
         projectName: currentProject.name,
         operator: currentProject.operator,
@@ -209,7 +210,11 @@ export default function ReportWizard() {
         regions: regionsData,
         globalParameters: globalParameters,
         format: format
-      });
+      };
+
+      console.log('[DEBUG] Sending report request:', requestPayload);
+      
+      const blob = await generateReport(requestPayload);
 
       // Download the file
       const filename = `${reportSettings.title.replace(/\s+/g, '_')}.${format}`;
@@ -219,6 +224,81 @@ export default function ReportWizard() {
     } catch (error) {
       console.error('Error generating report:', error);
       toast.error(language === 'fa' ? 'خطا در تولید گزارش' : 'Error generating report');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleGenerateBilingualReport = async (format: 'pdf' | 'docx') => {
+    if (!currentProject) {
+      toast.error(language === 'fa' ? 'لطفاً ابتدا یک پروژه ایجاد کنید' : 'Please create a project first');
+      return;
+    }
+
+    if (reportSettings.includeImages && Object.keys(imagesBase64).length === 0) {
+      toast.error(language === 'fa' ? 'لطفاً منتظر بمانید تا تصاویر آماده شوند...' : 'Please wait for images to load...');
+      return;
+    }
+
+    setIsGenerating(true);
+
+    try {
+      toast.info(language === 'fa' ? 'در حال تولید گزارش‌های دو زبانه...' : 'Generating bilingual reports...');
+
+      // Prepare data (same as single report)
+      const imagesData = images.map(img => ({
+        id: img.id,
+        name: img.name,
+        thermalBase64: imagesBase64[`${img.id}_thermal`] || imagesBase64[`${img.id}_server`],
+        realBase64: imagesBase64[img.id],
+        csvUrl: img.csvUrl
+      }));
+
+      const markersData = markers.map(marker => ({
+        id: marker.id,
+        imageId: marker.imageId,
+        label: marker.label,
+        x: marker.x,
+        y: marker.y,
+        temperature: marker.temperature || 0
+      }));
+
+      const regionsData = regions.map(region => ({
+        id: region.id,
+        imageId: region.imageId,
+        label: region.label,
+        type: region.type,
+        points: region.points,
+        minTemp: region.minTemp || 0,
+        maxTemp: region.maxTemp || 0,
+        avgTemp: region.avgTemp || 0
+      }));
+
+      const requestPayload = {
+        projectId: currentProject.id,
+        projectName: currentProject.name,
+        operator: currentProject.operator,
+        company: currentProject.company,
+        settings: reportSettings,
+        images: imagesData,
+        markers: markersData,
+        regions: regionsData,
+        globalParameters: globalParameters,
+        format: format
+      };
+
+      console.log('[DEBUG] Sending bilingual report request:', requestPayload);
+      
+      const blob = await generateBilingualReport(requestPayload);
+
+      // Download the ZIP file
+      const filename = `${reportSettings.title.replace(/\s+/g, '_')}_Reports.zip`;
+      saveAs(blob, filename);
+
+      toast.success(language === 'fa' ? 'گزارش‌های فارسی و انگلیسی با موفقیت ایجاد شد' : 'Persian and English reports generated successfully');
+    } catch (error) {
+      console.error('Error generating bilingual reports:', error);
+      toast.error(language === 'fa' ? 'خطا در تولید گزارش‌ها' : 'Error generating reports');
     } finally {
       setIsGenerating(false);
     }
@@ -511,6 +591,40 @@ export default function ReportWizard() {
           <FileType className="w-4 h-4 mr-2" />
           {language === 'fa' ? 'دانلود Word' : 'Download Word'}
         </Button>
+      </div>
+
+      {/* Bilingual Reports Section */}
+      <div className="mt-4 pt-4 border-t border-gray-600">
+        <h4 className="text-xs font-medium mb-2 text-gray-400">
+          {language === 'fa' ? 'گزارش دو زبانه (فارسی + انگلیسی)' : 'Bilingual Reports (Persian + English)'}
+        </h4>
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => handleGenerateBilingualReport('pdf')}
+            className="h-10"
+            disabled={isGenerating || (reportSettings.includeImages && Object.keys(imagesBase64).length === 0)}
+          >
+            <Download className="w-4 h-4 mr-2" />
+            {language === 'fa' ? 'دو PDF' : '2 PDFs (ZIP)'}
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => handleGenerateBilingualReport('docx')}
+            className="h-10"
+            disabled={isGenerating || (reportSettings.includeImages && Object.keys(imagesBase64).length === 0)}
+          >
+            <FileType className="w-4 h-4 mr-2" />
+            {language === 'fa' ? 'دو Word' : '2 Words (ZIP)'}
+          </Button>
+        </div>
+        <p className="text-xs text-gray-500 mt-2">
+          {language === 'fa' 
+            ? 'دانلود فایل ZIP شامل گزارش فارسی و انگلیسی' 
+            : 'Download ZIP file containing Persian and English reports'}
+        </p>
       </div>
     </div>
   );

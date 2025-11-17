@@ -1,6 +1,8 @@
 {
   "name": "thermal-analyzer",
   "version": "1.0.0",
+  "description": "Professional Thermal Image Analysis Software",
+  "author": "Thermal Analyzer Team",
   "private": true,
   "main": "main.js",
   "scripts": {
@@ -12,7 +14,7 @@
     "copy:backend": "node scripts/copy-backend.js",
     "export": "next build",
     "electron": "electron .",
-    "build:electron": "npm run export && npm run build:backend && npm run copy:backend && electron-builder build --win",
+    "build:electron": "electron-builder build --win",
     "build:all": "node scripts/build-all.js",
     "dist": "npm run build:all"
   },
@@ -95,17 +97,15 @@
     "appId": "com.thermalanalyzer.app",
     "productName": "Thermal Analyzer Pro",
     "directories": {
-      "output": "dist_electron",
+      "output": "dist_build",
       "app": "."
     },
     "files": [
       "main.js",
       "out/**/*",
       "package.json",
-      {
-        "from": "dist_backend_temp/thermal_api",
-        "to": "server_executable_build/thermal_api"
-      }
+      "!out/**/*.map",
+      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,__pycache__,thumbs.db,.gitignore,.gitattributes,.editorconfig,.idea,appveyor.yml,.travis.yml,circle.yml,npm-debug.log,.nyc_output,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
     ],
     "asarUnpack": [
       "server_executable_build/thermal_api/**/*"
@@ -125,7 +125,6 @@
           ]
         }
       ],
-      "icon": "assets/icon.ico",
       "verifyUpdateCodeSignature": false
     },
     "nsis": {
@@ -133,17 +132,13 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Thermal Analyzer Pro",
-      "installerIcon": "assets/icon.ico",
-      "uninstallerIcon": "assets/icon.ico",
-      "installerHeaderIcon": "assets/icon.ico"
+      "shortcutName": "Thermal Analyzer Pro"
     },
     "portable": {
       "artifactName": "ThermalAnalyzerPro-Portable.exe"
     },
     "mac": {
       "target": "dmg",
-      "icon": "assets/icon.icns",
       "category": "public.app-category.developer-tools"
     },
     "linux": {
@@ -151,7 +146,6 @@
         "AppImage",
         "deb"
       ],
-      "icon": "assets/icon.png",
       "category": "Science"
     }
   }

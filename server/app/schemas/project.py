@@ -14,7 +14,14 @@ class ProjectBase(BaseModel):
     notes: Optional[str] = None
 
 class ProjectCreate(ProjectBase):
-    pass
+    # State persistence fields for new projects
+    active_image_id: Optional[UUID] = None
+    current_palette: Optional[str] = "iron"
+    custom_min_temp: Optional[float] = None
+    custom_max_temp: Optional[float] = None
+    global_parameters: Optional[Dict[str, Any]] = None
+    display_settings: Optional[Dict[str, Any]] = None
+    window_layout: Optional[Dict[str, Any]] = None
 
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
@@ -22,6 +29,14 @@ class ProjectUpdate(BaseModel):
     company: Optional[str] = None
     notes: Optional[str] = None
     has_unsaved_changes: Optional[bool] = None
+    # State persistence fields
+    active_image_id: Optional[UUID] = None
+    current_palette: Optional[str] = None
+    custom_min_temp: Optional[float] = None
+    custom_max_temp: Optional[float] = None
+    global_parameters: Optional[Dict[str, Any]] = None
+    display_settings: Optional[Dict[str, Any]] = None
+    window_layout: Optional[Dict[str, Any]] = None
 
 class ProjectResponse(ProjectBase):
     id: UUID
@@ -29,6 +44,14 @@ class ProjectResponse(ProjectBase):
     has_unsaved_changes: bool
     created_at: datetime
     updated_at: datetime
+    # State persistence fields
+    active_image_id: Optional[UUID] = None
+    current_palette: str = "iron"
+    custom_min_temp: Optional[float] = None
+    custom_max_temp: Optional[float] = None
+    global_parameters: Optional[Dict[str, Any]] = None
+    display_settings: Optional[Dict[str, Any]] = None
+    window_layout: Optional[Dict[str, Any]] = None
     
     class Config:
         from_attributes = True
@@ -81,6 +104,14 @@ class BulkSaveRequest(BaseModel):
     images: List[BulkImageData] = []
     markers: List[BulkMarkerData] = []
     regions: List[BulkRegionData] = []
+    # State persistence fields
+    active_image_id: Optional[str] = None
+    current_palette: Optional[str] = "iron"
+    custom_min_temp: Optional[float] = None
+    custom_max_temp: Optional[float] = None
+    global_parameters: Optional[Dict[str, Any]] = None
+    display_settings: Optional[Dict[str, Any]] = None
+    window_layout: Optional[Dict[str, Any]] = None
 
 class BulkSaveResponse(BaseModel):
     """Response schema for bulk save operation"""

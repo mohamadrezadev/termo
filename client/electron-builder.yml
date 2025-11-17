@@ -1,0 +1,72 @@
+appId: com.thermalanalyzer.app
+productName: Thermal Analyzer Pro
+copyright: Copyright © 2025 Thermal Analyzer
+
+directories:
+  output: dist_electron
+  buildResources: assets
+
+files:
+  - main.js
+  - out/**/*
+  - package.json
+  - node_modules/**/*
+  - "!node_modules/**/{CHANGELOG.md,README.md,README,readme.md,readme}"
+  - "!node_modules/**/{test,__tests__,tests,powered-test,example,examples}"
+  - "!node_modules/**/*.d.ts"
+  - "!node_modules/.bin"
+  - "!**/.DS_Store"
+  - from: dist_backend_temp/thermal_api
+    to: server_executable_build/thermal_api
+    filter:
+      - "**/*"
+
+asarUnpack:
+  - server_executable_build/thermal_api/**/*
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+  verifyUpdateCodeSignature: false
+  requestedExecutionLevel: asInvoker
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  allowElevation: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: "Thermal Analyzer Pro"
+  displayLanguageSelector: false
+  artifactName: "ThermalAnalyzerPro-Setup-${version}.exe"
+  deleteAppDataOnUninstall: false
+  runAfterFinish: true
+  include: installer.nsh
+
+portable:
+  artifactName: "ThermalAnalyzerPro-Portable-${version}.exe"
+
+mac:
+  target:
+    - dmg
+    - zip
+  category: public.app-category.developer-tools
+  hardenedRuntime: true
+  gatekeeperAssess: false
+
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Science
+  synopsis: Professional thermal image analysis software
+  description: Advanced thermal imaging analysis tool for professional use
+
+publish:
+  provider: generic
+  url: https://example.com/updates/

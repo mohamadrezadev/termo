@@ -218,7 +218,9 @@ export async function serializeProject(
     name: project.name,
     operator: project.operator,
     company: project.company,
-    date: project.date.toISOString(),
+    date: project.date instanceof Date && !isNaN(project.date.getTime()) 
+      ? project.date.toISOString() 
+      : new Date().toISOString(),
     notes: project.notes,
     images: serializedImages,
     markers: markers.filter(m => images.some(img => img.id === m.imageId)),
@@ -303,15 +305,25 @@ export function deserializeProject(serialized: SerializedProject): {
 // ==================== Project Operations ====================
 
 /**
- * ذخیره پروژه در بک‌اند
- * Save project to backend
+ * ذخیره پروژه در بک‌اند با state persistence کامل
+ * Save project to backend with complete state persistence
  */
 export async function saveProjectToAPI(
   project: Project,
   images: ThermalImage[],
   markers: Marker[],
   regions: Region[],
-  isNewProject: boolean = false
+  isNewProject: boolean = false,
+  // State persistence data
+  stateData?: {
+    activeImageId?: string | null;
+    currentPalette?: string;
+    customMinTemp?: number | null;
+    customMaxTemp?: number | null;
+    globalParameters?: any;
+    displaySettings?: any;
+    windowLayout?: any;
+  }
 ): Promise<{ success: boolean; error?: string; projectId?: string }> {
   try {
     console.log('[PROJECT_SERVICE_API] Starting project save to API...');
@@ -323,8 +335,8 @@ export async function saveProjectToAPI(
 
     const serialized = await serializeProject(project, images, markers, regions);
 
-    // استفاده از bulk save API
-    // اگر پروژه جدیده یا هنوز ID نداره، "null" رو بفرست تا سرور پروژه جدید بسازه
+    // استفاده از bulk save API (که در واقع همان endpoint عادی save است)
+    // بکند یک endpoint دارد که همه چیز را قبول می‌کند
     const projectIdToSend = isNewProject ? null : project.id;
 
     const result = await apiService.bulkSaveProject(
@@ -361,12 +373,24 @@ export async function saveProjectToAPI(
         max_temp: r.maxTemp,
         avg_temp: r.avgTemp,
         notes: r.notes
-      }))
+      })),
+      // State persistence data
+      stateData ? {
+        active_image_id: stateData.activeImageId || undefined,
+        current_palette: stateData.currentPalette || 'iron',
+        custom_min_temp: stateData.customMinTemp,
+        custom_max_temp: stateData.customMaxTemp,
+        global_parameters: stateData.globalParameters,
+        display_settings: stateData.displaySettings,
+        window_layout: stateData.windowLayout
+      } : undefined
     );
 
     console.log('[PROJECT_SERVICE_API] Project saved successfully to API');
-    console.log('[PROJECT_SERVICE_API] Returned project ID:', result.id);
-    return { success: true, projectId: result.id };
+    console.log('[PROJECT_SERVICE_API] Returned data:', result);
+    // بکند project_id را برمی‌گرداند
+    const projectId = result.project?.id || result.project_id || result.id || projectIdToSend;
+    return { success: true, projectId };
   } catch (error) {
     console.error('[PROJECT_SERVICE_API] Error saving project:', error);
     return {
@@ -383,7 +407,9 @@ export async function saveProjectToAPI(
 export async function loadProjectsFromAPI(): Promise<SerializedProject[]> {
   try {
     console.log('[PROJECT_SERVICE_API] Loading projects from API...');
-    const projects = await apiService.getProjects();
+    const response = await apiService.listProjects();
+    // بکند لیست را در response.projects برمی‌گرداند
+    const projects = response.projects || [];
     console.log(`[PROJECT_SERVICE_API] Loaded ${projects.length} projects from API`);
     return projects;
   } catch (error) {
@@ -393,8 +419,8 @@ export async function loadProjectsFromAPI(): Promise<SerializedProject[]> {
 }
 
 /**
- * بارگذاری یک پروژه خاص از API
- * Load a specific project from API
+ * بارگذاری یک پروژه خاص از API با state persistence کامل
+ * Load a specific project from API with complete state persistence
  */
 export async function loadProjectFromAPI(projectId: string): Promise<{
   success: boolean;
@@ -403,12 +429,25 @@ export async function loadProjectFromAPI(projectId: string): Promise<{
     images: ThermalImage[];
     markers: Marker[];
     regions: Region[];
+    // State persistence data
+    stateData?: {
+      activeImageId?: string | null;
+      currentPalette?: string;
+      customMinTemp?: number | null;
+      customMaxTemp?: number | null;
+      globalParameters?: any;
+      displaySettings?: any;
+      windowLayout?: any;
+    };
   };
   error?: string;
 }> {
   try {
     console.log('[PROJECT_SERVICE_API] Loading project:', projectId);
-    const projectData = await apiService.getProjectDetail(projectId);
+    const response = await apiService.loadProject(projectId);
+    
+    // بکند پروژه را در response.project برمی‌گرداند
+    const projectData = response.project || response;
     
     if (!projectData) {
       console.error('[PROJECT_SERVICE_API] Project not found:', projectId);
@@ -418,12 +457,24 @@ export async function loadProjectFromAPI(projectId: string): Promise<{
     console.log('[PROJECT_SERVICE_API] Deserializing project data...');
     const data = deserializeProject(projectData);
     
+    // Extract state persistence data from backend
+    const stateData = {
+      activeImageId: projectData.active_image_id || projectData.activeImageId || null,
+      currentPalette: projectData.current_palette || projectData.currentPalette || 'iron',
+      customMinTemp: projectData.custom_min_temp !== undefined ? projectData.custom_min_temp : (projectData.customMinTemp || null),
+      customMaxTemp: projectData.custom_max_temp !== undefined ? projectData.custom_max_temp : (projectData.customMaxTemp || null),
+      globalParameters: projectData.global_parameters || projectData.globalParameters || undefined,
+      displaySettings: projectData.display_settings || projectData.displaySettings || undefined,
+      windowLayout: projectData.window_layout || projectData.windowLayout || undefined
+    };
+    
     console.log('[PROJECT_SERVICE_API] Project loaded successfully');
     console.log(`[PROJECT_SERVICE_API] Images: ${data.images.length}`);
     console.log(`[PROJECT_SERVICE_API] Markers: ${data.markers.length}`);
     console.log(`[PROJECT_SERVICE_API] Regions: ${data.regions.length}`);
+    console.log('[PROJECT_SERVICE_API] State data:', stateData);
     
-    return { success: true, data };
+    return { success: true, data: { ...data, stateData } };
   } catch (error) {
     console.error('[PROJECT_SERVICE_API] Error loading project:', error);
     return { 
@@ -457,14 +508,23 @@ export async function deleteProjectFromAPI(projectId: string): Promise<{ success
 let autoSaveTimeout: NodeJS.Timeout | null = null;
 
 /**
- * برنامه‌ریزی ذخیره خودکار
- * Schedule auto save
+ * برنامه‌ریزی ذخیره خودکار با state persistence کامل
+ * Schedule auto save with complete state persistence
  */
 export function scheduleAutoSave(
   project: Project,
   images: ThermalImage[],
   markers: Marker[],
   regions: Region[],
+  stateData?: {
+    activeImageId?: string | null;
+    currentPalette?: string;
+    customMinTemp?: number | null;
+    customMaxTemp?: number | null;
+    globalParameters?: any;
+    displaySettings?: any;
+    windowLayout?: any;
+  },
   delayMs: number = 5000
 ) {
   if (autoSaveTimeout) {
@@ -473,7 +533,7 @@ export function scheduleAutoSave(
   
   autoSaveTimeout = setTimeout(async () => {
     console.log('[PROJECT_SERVICE_API] Auto-saving project...');
-    const result = await saveProjectToAPI(project, images, markers, regions);
+    const result = await saveProjectToAPI(project, images, markers, regions, false, stateData);
     if (result.success) {
       console.log('[PROJECT_SERVICE_API] Project auto-saved successfully');
     } else {

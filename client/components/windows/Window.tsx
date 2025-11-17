@@ -1,10 +1,10 @@
 'use client';
 
-import { ReactNode, useRef, useEffect } from 'react';
+import { ReactNode, useRef, useEffect, useState } from 'react';
 import { Rnd } from 'react-rnd';
 import { useAppStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
-import { X, Minus, Maximize2 } from 'lucide-react';
+import { X, Minimize2, Maximize2, Shrink } from 'lucide-react';
 
 interface WindowProps {
   id: string;
@@ -12,6 +12,7 @@ interface WindowProps {
   children: ReactNode;
   minWidth?: number;
   minHeight?: number;
+  gridMode?: boolean;
 }
 
 export default function Window({ 
@@ -19,7 +20,8 @@ export default function Window({
   title, 
   children, 
   minWidth = 300, 
-  minHeight = 200 
+  minHeight = 200,
+  gridMode = false
 }: WindowProps) {
   const { 
     windows, 
@@ -28,8 +30,17 @@ export default function Window({
     toggleWindow 
   } = useAppStore();
   
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  
   const windowRef = useRef<HTMLDivElement>(null);
   const window = windows.find(w => w.id === id);
+
+  console.log('[Window]', id, {
+    found: !!window,
+    isOpen: window?.isOpen,
+    gridMode,
+    windowsCount: windows.length
+  });
 
   useEffect(() => {
     if (windowRef.current && window && windowRef.current.style) {
@@ -48,6 +59,91 @@ export default function Window({
   const handleClose = () => {
     toggleWindow(id);
   };
+
+  const handleFullscreen = () => {
+    setIsFullscreen(!isFullscreen);
+  };
+
+  // Grid mode rendering (non-draggable, tiled layout)
+  if (gridMode) {
+    return (
+      <div 
+        className={`bg-gray-800 border border-gray-600 rounded-lg shadow-lg overflow-hidden h-full flex flex-col ${
+          isFullscreen ? 'fixed inset-0 z-[9999] rounded-none' : ''
+        }`}
+        style={isFullscreen ? {} : { zIndex: window.zIndex }}
+      >
+        {/* Window Header */}
+        <div className="flex items-center justify-between h-8 bg-gray-700 border-b border-gray-600 px-2">
+          <span className="text-sm font-medium text-gray-200 truncate">
+            {title}
+          </span>
+          <div className="flex items-center space-x-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 hover:bg-gray-600"
+              onClick={handleFullscreen}
+              title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+            >
+              {isFullscreen ? <Shrink className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 hover:bg-gray-600"
+              onClick={handleClose}
+            >
+              <X className="w-3 h-3" />
+            </Button>
+          </div>
+        </div>
+        
+        {/* Window Content */}
+        <div className="flex-1 overflow-hidden">
+          {children}
+        </div>
+      </div>
+    );
+  }
+
+  // Floating mode rendering (draggable, resizable)
+  if (isFullscreen) {
+    return (
+      <div className="fixed inset-0 z-[9999] bg-gray-800 flex flex-col">
+        {/* Window Header */}
+        <div className="flex items-center justify-between h-8 bg-gray-700 border-b border-gray-600 px-2">
+          <span className="text-sm font-medium text-gray-200 truncate">
+            {title}
+          </span>
+          <div className="flex items-center space-x-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 hover:bg-gray-600"
+              onClick={handleFullscreen}
+              title="Exit Fullscreen"
+            >
+              <Shrink className="w-3 h-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 hover:bg-gray-600"
+              onClick={handleClose}
+            >
+              <X className="w-3 h-3" />
+            </Button>
+          </div>
+        </div>
+        
+        {/* Window Content */}
+        <div className="flex-1 overflow-hidden">
+          {children}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Rnd
@@ -99,6 +195,15 @@ export default function Window({
             {title}
           </span>
           <div className="flex items-center space-x-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 hover:bg-gray-600"
+              onClick={handleFullscreen}
+              title="Fullscreen"
+            >
+              {isFullscreen ? <Shrink className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
+            </Button>
             <Button
               variant="ghost"
               size="sm"

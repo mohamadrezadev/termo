@@ -46,19 +46,29 @@ function getBackendExecutablePath() {
 
 
 function createWindow() {
-  const mainWindow = new BrowserWindow({
+  const windowConfig = {
     width: 1600,
     height: 1000,
     minWidth: 1200,
     minHeight: 800,
-    icon: process.platform === 'win32' ? 'assets/icon.ico' : 'assets/icon.png', // Add icon if available
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       webSecurity: false, // Disable for local server communication
       allowRunningInsecureContent: true,
     }
-  });
+  };
+
+  // Add icon only if file exists
+  const iconPath = process.platform === 'win32' 
+    ? path.join(__dirname, 'assets', 'icon.ico')
+    : path.join(__dirname, 'assets', 'icon.png');
+  
+  if (fs.existsSync(iconPath)) {
+    windowConfig.icon = iconPath;
+  }
+
+  const mainWindow = new BrowserWindow(windowConfig);
 
   // Always load from static files for desktop app
   const indexPath = path.join(__dirname, 'out', 'index.html');

@@ -14,7 +14,7 @@ import Timeline from '../windows/Timeline';
 import Reports from '../windows/Reports';
 
 export default function MainLayout() {
-  const { language, isRTL, currentProject } = useAppStore();
+  const { language, isRTL, currentProject, layoutMode } = useAppStore();
   const t = translations[language];
 
   // اگر پروژه‌ای فعال نیست، صفحه خوش‌آمدگویی نمایش داده می‌شود
@@ -27,7 +27,7 @@ export default function MainLayout() {
       <TopMenuBar />
       
       <div className="relative h-[calc(100vh-40px)] overflow-hidden">
-        <WindowManager>
+        <WindowManager mode={layoutMode}>
           <ThermalViewer />
           <RealImageViewer />
           <DataTable />

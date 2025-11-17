@@ -54,7 +54,8 @@ export default function ThermalViewer() {
     addMarker,
     addRegion,
     setActiveImage,
-    updateImagePalettes
+    updateImagePalettes,
+    updateGlobalParameters
   } = useAppStore();
   
   const { zoom, panX, panY } = thermalView;
@@ -427,6 +428,18 @@ export default function ThermalViewer() {
 
         addImage(newImage);
         setActiveImage(newImage.id);
+        
+        // Update global parameters with camera model from first uploaded image
+        if (metadata.cameraModel) {
+          updateGlobalParameters({ 
+            cameraModel: metadata.cameraModel,
+            emissivity: metadata.emissivity,
+            ambientTemp: metadata.ambientTemp,
+            reflectedTemp: metadata.reflectedTemp,
+            humidity: metadata.humidity,
+            distance: metadata.distance
+          });
+        }
 
       } else {
         console.warn('[UPLOAD] Server response did not contain thermal or real image URLs for file:', file.name, result);
