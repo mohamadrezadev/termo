@@ -39,11 +39,22 @@ interface SerializedImage {
 // ==================== Helper Functions ====================
 
 // تبدیل ماتریس دما به base64
+// function matrixToBase64(matrix: number[][]): string {
+//   const flat = matrix.flat();
+//   const buffer = new Float32Array(flat);
+//   const bytes = new Uint8Array(buffer.buffer);
+//   return btoa(String.fromCharCode(...bytes));
+// }
 function matrixToBase64(matrix: number[][]): string {
   const flat = matrix.flat();
   const buffer = new Float32Array(flat);
   const bytes = new Uint8Array(buffer.buffer);
-  return btoa(String.fromCharCode(...bytes));
+  // استفاده از حلقه برای جلوگیری از Maximum call stack size exceeded در آرایه‌های بزرگ
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
 }
 
 // تبدیل base64 به ماتریس دما

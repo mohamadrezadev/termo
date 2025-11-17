@@ -3,12 +3,21 @@
  * API Service for backend communication using Axios
  */
 
-import apiClient from './axios-config';
+import apiClient, { API_BASE_URL } from './axios-config';
 import { AxiosError } from 'axios';
+import type {
+  ProjectPayload,
+  ProjectListItem,
+  ProjectDetailResponse,
+  SaveProjectResponse,
+  LoadProjectResponse,
+  ListProjectsResponse,
+  DeleteProjectResponse,
+  ThermalImageUploadResponse
+} from './api-types';
 
 // Helper function to get base server URL for static files
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
-const SERVER_BASE_URL = API_BASE_URL.replace('/api/v1', '');
+const SERVER_BASE_URL = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
 
 /**
  * تبدیل URL نسبی به URL مطلق سرور
@@ -134,18 +143,6 @@ export async function updateProject(
     return response.data;
   } catch (error) {
     handleError(error, `Update project ${projectId}`);
-  }
-}
-
-/**
- * پروژه را حذف کن
- * Delete a project
- */
-export async function deleteProject(projectId: string): Promise<void> {
-  try {
-    await apiClient.delete(`/${projectId}`);
-  } catch (error) {
-    handleError(error, `Delete project ${projectId}`);
   }
 }
 
@@ -507,5 +504,108 @@ export async function generateReport(requestData: {
     return response.data;
   } catch (error) {
     handleError(error, 'Generate report');
+  }
+}
+
+/**
+ * تغییر پالت رنگی تصویر حرارتی
+ * Change thermal image color palette
+ */
+export async function rerenderPalette(
+  file: File | null,
+  projectName: string,
+  palette: string
+): Promise<any> {
+  try {
+    const formData = new FormData();
+    if (file) {
+      formData.append('bmt_file', file);
+    }
+    formData.append('project_name', projectName);
+    formData.append('palette', palette);
+
+    const response = await apiClient.post('/thermal/upload/rerender-palette', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+
+    return response.data;
+  } catch (error) {
+    handleError(error, 'Rerender palette');
+  }
+}
+
+/**
+ * ذخیره پروژه با تمام اطلاعات (تصاویر، markers، regions)
+ * Save project with all data (images, markers, regions)
+ */
+export async function saveProject(projectData: ProjectPayload): Promise<SaveProjectResponse> {
+  try {
+    const response = await apiClient.post('/project/save', {
+      id: projectData.id,
+      name: projectData.name,
+      description: projectData.description || projectData.parameters?.timestamp?.toString() || '',
+      operator: projectData.operator || '',
+      company: projectData.company || '',
+      images: projectData.images || [],
+      markers: projectData.markers || [],
+      regions: projectData.regions || [],
+      activeImageId: projectData.activeImageId,
+      currentPalette: projectData.currentPalette,
+      customMinTemp: projectData.customMinTemp,
+      customMaxTemp: projectData.customMaxTemp,
+      parameters: projectData.parameters || {}
+    });
+
+    console.log('[API] Project saved successfully:', response.data);
+    return response.data;
+  } catch (error) {
+    handleError(error, 'Save project');
+  }
+}
+
+/**
+ * بارگذاری پروژه با تمام اطلاعات
+ * Load project with all data
+ */
+export async function loadProject(projectId: string): Promise<LoadProjectResponse> {
+  try {
+    const response = await apiClient.get(`/project/load/${projectId}`);
+    
+    console.log('[API] Project loaded successfully:', response.data);
+    return response.data;
+  } catch (error) {
+    handleError(error, 'Load project');
+  }
+}
+
+/**
+ * دریافت لیست تمام پروژه‌ها
+ * Get list of all projects
+ */
+export async function listProjects(): Promise<ListProjectsResponse> {
+  try {
+    const response = await apiClient.get('/project/list');
+    
+    console.log('[API] Projects list retrieved:', response.data);
+    return response.data;
+  } catch (error) {
+    handleError(error, 'List projects');
+  }
+}
+
+/**
+ * حذف پروژه
+ * Delete project
+ */
+export async function deleteProject(projectId: string): Promise<DeleteProjectResponse> {
+  try {
+    const response = await apiClient.delete(`/project/delete/${projectId}`);
+    
+    console.log('[API] Project deleted:', response.data);
+    return response.data;
+  } catch (error) {
+    handleError(error, 'Delete project');
   }
 }

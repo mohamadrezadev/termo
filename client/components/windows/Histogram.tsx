@@ -22,7 +22,18 @@ export default function Histogram() {
   const palette = COLOR_PALETTES[currentPalette];
 
   const histogramData = useMemo(() => {
-    if (!activeImage?.thermalData) return [];
+    if (!activeImage?.thermalData) {
+      return {
+        data: [],
+        stats: {
+          mean: 0,
+          stdDev: 0,
+          min: 0,
+          max: 0,
+          totalPixels: 0
+        }
+      };
+    }
 
     const { temperatureMatrix, minTemp, maxTemp } = activeImage.thermalData;
     const effectiveMin = customMinTemp ?? minTemp;
@@ -50,9 +61,9 @@ export default function Histogram() {
       }
     }
 
-    const mean = sum / totalPixels;
+    const mean = totalPixels > 0 ? sum / totalPixels : 0;
     const variance = temperatureMatrix.flat()
-      .reduce((acc, temp) => acc + Math.pow(temp - mean, 2), 0) / totalPixels;
+      .reduce((acc, temp) => acc + Math.pow(temp - mean, 2), 0) / (totalPixels || 1);
     const stdDev = Math.sqrt(variance);
 
     // Convert to chart data with colors
@@ -69,8 +80,8 @@ export default function Histogram() {
       stats: {
         mean: mean.toFixed(1),
         stdDev: stdDev.toFixed(1),
-        min: min.toFixed(1),
-        max: max.toFixed(1),
+        min: min === Infinity ? '0.0' : min.toFixed(1),
+        max: max === -Infinity ? '0.0' : max.toFixed(1),
         totalPixels
       }
     };
@@ -112,7 +123,7 @@ export default function Histogram() {
                   <XAxis 
                     dataKey="temperature" 
                     tick={{ fontSize: 10, fill: '#9ca3af' }}
-                    interval="preserveStartEnd"
+                    interval={Math.max(0, Math.floor(histogramData.data.length / 10))}
                   />
                   <YAxis 
                     tick={{ fontSize: 10, fill: '#9ca3af' }}
@@ -132,13 +143,19 @@ export default function Histogram() {
 
             {/* Color Scale */}
             <div className="mt-2">
-              <div className="h-4 rounded" style={{
-                background: `linear-gradient(to right, ${palette?.colors.join(', ')})`
-              }} />
-              <div className="flex justify-between text-xs text-gray-400 mt-1">
-                <span>{formatTemperatureDual(customMinTemp ?? activeImage.thermalData.minTemp)}</span>
-                <span>{formatTemperatureDual(customMaxTemp ?? activeImage.thermalData.maxTemp)}</span>
-              </div>
+              {palette ? (
+                <div>
+                  <div className="h-4 rounded" style={{
+                    background: `linear-gradient(to right, ${palette.colors.map((c, i) => `${c} ${(i / (palette.colors.length - 1)) * 100}%`).join(', ')})`
+                  }} />
+                  <div className="flex justify-between text-xs text-gray-400 mt-1">
+                    <span>{formatTemperatureDual(customMinTemp ?? activeImage.thermalData.minTemp)}</span>
+                    <span>{formatTemperatureDual(customMaxTemp ?? activeImage.thermalData.maxTemp)}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="h-4 bg-gradient-to-r from-blue-500 to-blue-600 rounded" />
+              )}
             </div>
           </>
         ) : (

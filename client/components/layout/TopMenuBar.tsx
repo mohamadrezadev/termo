@@ -47,7 +47,9 @@ export default function TopMenuBar() {
     isFullscreen,
     toggleFullscreen,
     addImage,
-    setActiveImage
+    setActiveImage,
+    saveProjectSnapshot,
+    loadProjectSnapshot
   } = useAppStore();
   const t = translations[language];
 
@@ -55,6 +57,7 @@ export default function TopMenuBar() {
   const [templateMode, setTemplateMode] = useState<'save' | 'load'>('load');
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
   const [projectDialogMode, setProjectDialogMode] = useState<'new' | 'open' | 'save'>('new');
+  const [isSaving, setIsSaving] = useState(false);
 
   const handleFileUpload = () => {
     // Trigger the ThermalViewer's file upload by dispatching a custom event
@@ -75,6 +78,26 @@ export default function TopMenuBar() {
   const handleOpenProjectDialog = (mode: 'new' | 'open' | 'save') => {
     setProjectDialogMode(mode);
     setProjectDialogOpen(true);
+  };
+
+  const handleSaveProject = async () => {
+    if (!currentProject) {
+      toast.error('No project to save');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      const success = await saveProjectSnapshot();
+      if (success) {
+        console.log('[TopMenuBar] Project saved successfully');
+      }
+    } catch (error) {
+      console.error('[TopMenuBar] Error saving project:', error);
+      toast.error('Failed to save project');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -110,11 +133,11 @@ export default function TopMenuBar() {
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem 
-                onClick={() => handleOpenProjectDialog('save')}
-                disabled={!currentProject}
+                onClick={handleSaveProject}
+                disabled={!currentProject || isSaving}
               >
                 <Save className="w-4 h-4 mr-2" />
-                {t.saveProject}
+                {isSaving ? 'Saving...' : t.saveProject}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleFileUpload}>

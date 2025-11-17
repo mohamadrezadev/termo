@@ -99,6 +99,11 @@ export interface AppState {
   toggleFullscreen: () => void;
   setCurrentProject: (project: Project | null) => void;
   addProject: (project: Project) => void;
+  deleteProject: (projectId: string) => Promise<void>;
+  loadProjects: () => Promise<void>;
+  autoSaveProject: () => void;
+  saveProjectSnapshot: () => Promise<boolean>;
+  loadProjectSnapshot: (projectId: string) => Promise<Project | null>;
   removeProject: (projectId: string) => Promise<void>;
   saveCurrentProject: (project: Project, isNewProject?: boolean) => Promise<void>;
   loadProjectById: (projectId: string) => Promise<void>;
@@ -120,6 +125,8 @@ export interface AppState {
   setRealZoom: (zoom: number) => void;
   setRealPan: (x: number, y: number) => void;
   setActiveTool: (tool: string) => void;
+  // Update server palette URLs for a specific image (merge)
+  updateImagePalettes: (imageId: string, palettes: Record<string, string> | null) => void;
   toggleWindow: (windowId: string) => void;
   updateWindow: (windowId: string, updates: Partial<WindowState>) => void;
   bringWindowToFront: (windowId: string) => void;
@@ -281,11 +288,10 @@ export const useAppStore = create<AppState>()(
       gridRows: 2,
       globalParameters: {
         emissivity: 0.95,
-        ambientTemperature: 20,
-        atmosphericTransmission: 1.0,
-        distanceToObject: 1.0,
-        relativeHumidity: 50,
-        reflectedTemperature: 20
+        ambientTemp: 20,
+        reflectedTemp: 20,
+        humidity: 0.5,
+        distance: 1.0
       },
       timelineImages: [],
       currentTimeIndex: 0,
@@ -474,22 +480,125 @@ export const useAppStore = create<AppState>()(
         }
       },
 
+      // Save current project to database
+      saveProjectSnapshot: async () => {
+        const state = get();
+        if (!state.currentProject) {
+          toast.error('No project to save');
+          return false;
+        }
+
+        try {
+          console.log('[STORE] Saving project snapshot to database...');
+          const projectData = {
+            id: state.currentProject.id,
+            name: state.currentProject.name,
+            description: state.currentProject.notes,
+            operator: state.currentProject.operator,
+            company: state.currentProject.company,
+            images: state.images,
+            markers: state.markers,
+            regions: state.regions,
+            activeImageId: state.activeImageId,
+            currentPalette: state.currentPalette,
+            customMinTemp: state.customMinTemp,
+            customMaxTemp: state.customMaxTemp,
+            parameters: state.globalParameters
+          };
+
+          // Call API to save
+          const { saveProject } = await import('./api-service');
+          const result = await saveProject(projectData);
+          
+          if (result) {
+            // Update project state to mark as saved
+            set((state) => ({
+              currentProject: state.currentProject ? {
+                ...state.currentProject,
+                hasUnsavedChanges: false
+              } : null
+            }));
+            
+            toast.success('Project saved successfully');
+            return true;
+          }
+        } catch (error) {
+          console.error('[STORE] Failed to save project:', error);
+          toast.error('Failed to save project');
+          return false;
+        }
+      },
+
+      // Load project from database
+      loadProjectSnapshot: async (projectId: string) => {
+        try {
+          console.log('[STORE] Loading project snapshot from database:', projectId);
+          
+          const { loadProject } = await import('./api-service');
+          const result = await loadProject(projectId);
+          
+          if (result && result.project) {
+            const projectData = result.project;
+            
+            const loadedProject: Project = {
+              id: projectData.id,
+              name: projectData.name,
+              operator: projectData.operator || '',
+              company: projectData.company || '',
+              date: new Date(projectData.createdAt),
+              notes: projectData.description || '',
+              images: projectData.images || [],
+              markers: projectData.markers || [],
+              regions: projectData.regions || [],
+              hasUnsavedChanges: false
+            };
+
+            set({
+              currentProject: loadedProject,
+              images: projectData.images || [],
+              markers: projectData.markers || [],
+              regions: projectData.regions || [],
+              activeImageId: projectData.activeImageId || null,
+              currentPalette: projectData.currentPalette || 'iron',
+              customMinTemp: projectData.customMinTemp,
+              customMaxTemp: projectData.customMaxTemp,
+              globalParameters: projectData.parameters || {}
+            });
+
+            toast.success(`Project "${loadedProject.name}" loaded successfully`);
+            return loadedProject;
+          }
+        } catch (error) {
+          console.error('[STORE] Failed to load project:', error);
+          toast.error('Failed to load project');
+          return null;
+        }
+      },
+
       setActiveImage: (imageId) => set({ activeImageId: imageId }),
+     
 
       addImage: (image) => {
         const state = get();
-        console.log('[STORE] Adding image:', image.name);
         const newImages = [...state.images, image];
+        
+        // 1. به‌روزرسانی currentProject
         const updatedProject = state.currentProject ? {
           ...state.currentProject,
           images: newImages,
           hasUnsavedChanges: true
         } : null;
 
+        // 2. به‌روزرسانی لیست projects (اگر پروژه فعلی وجود دارد)
+        const updatedProjects = updatedProject 
+          ? state.projects.map(p => p.id === updatedProject.id ? updatedProject : p)
+          : state.projects;
+
         set({
           images: newImages,
           activeImageId: image.id,
-          currentProject: updatedProject
+          currentProject: updatedProject,
+          projects: updatedProjects // اضافه کردن این خط برای به‌روزرسانی لیست پروژه‌ها
         });
         
         // Auto-save after adding image
@@ -497,6 +606,55 @@ export const useAppStore = create<AppState>()(
           scheduleAutoSave(updatedProject, newImages, state.markers, state.regions);
         }
       },
+
+      // Update server palette URLs for an image (merge new entries)
+  updateImagePalettes: (imageId: string, palettes: Record<string, string> | null) => {
+        const state = get();
+        const newImages = state.images.map(img => {
+          if (img.id !== imageId) return img;
+          return {
+            ...img,
+            serverPalettes: {
+              ...(img.serverPalettes || {}),
+              ...(palettes || {})
+            }
+          };
+        });
+
+        const updatedProject = state.currentProject ? {
+          ...state.currentProject,
+          images: newImages,
+          hasUnsavedChanges: true
+        } : null;
+
+        set({ images: newImages, currentProject: updatedProject });
+
+        if (updatedProject) {
+          scheduleAutoSave(updatedProject, newImages, state.markers, state.regions);
+        }
+      },
+
+      // addImage: (image) => {
+      //   const state = get();
+      //   console.log('[STORE] Adding image:', image.name);
+      //   const newImages = [...state.images, image];
+      //   const updatedProject = state.currentProject ? {
+      //     ...state.currentProject,
+      //     images: newImages,
+      //     hasUnsavedChanges: true
+      //   } : null;
+
+      //   set({
+      //     images: newImages,
+      //     activeImageId: image.id,
+      //     currentProject: updatedProject
+      //   });
+        
+      //   // Auto-save after adding image
+      //   if (updatedProject) {
+      //     scheduleAutoSave(updatedProject, newImages, state.markers, state.regions);
+      //   }
+      // },
 
       removeImage: (imageId) => {
         const state = get();

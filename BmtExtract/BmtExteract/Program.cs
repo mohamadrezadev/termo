@@ -47,8 +47,17 @@ namespace BmtExtractor
 
             Directory.CreateDirectory(outputFolder);
 
+            // پارامترهای اضافی
             bool useFahrenheit = Array.Exists(args, a => a.Equals("--fahrenheit", StringComparison.OrdinalIgnoreCase));
             bool skipImages = Array.Exists(args, a => a.Equals("--skip-images", StringComparison.OrdinalIgnoreCase));
+            
+            // اگر پالت خاصی درخواست شده (برای rerender)
+            string requestedPalette = null;
+            if (args.Length > 2 && !args[2].StartsWith("--"))
+            {
+                requestedPalette = args[2].ToLower();
+                Console.WriteLine($"🎨 Rendering with specific palette: {requestedPalette}");
+            }
 
             ThermalImageApi image = null;
             try
@@ -83,7 +92,16 @@ namespace BmtExtractor
                 // تولید تصاویر (اختیاری)
                 if (!skipImages)
                 {
-                    GeneratePaletteImages(image, bmtData, useFahrenheit);
+                    if (!string.IsNullOrEmpty(requestedPalette))
+                    {
+                        // فقط پالت درخواستی را تولید کن
+                        GenerateSpecificPaletteImage(image, bmtData, requestedPalette, useFahrenheit);
+                    }
+                    else
+                    {
+                        // تمام پالت‌های اصلی را تولید کن
+                        GeneratePaletteImages(image, bmtData, useFahrenheit);
+                    }
                 }
                 else
                 {
@@ -217,19 +235,27 @@ namespace BmtExtractor
             {
                 for (int x = 0; x < width; x += samplingStep)
                 {
-                    double t = image.GetTemperature(x, y);
-                    if (useFahrenheit) t = t * 9 / 5 + 32;
-
-                    if (t < min) min = t;
-                    if (t > max) max = t;
-                    sum += t;
-                    count++;
-                    processedPixels++;
-
-                    // ذخیره چند نقطه نمونه
-                    if (samplePoints.Count < 20 && (x % (width / 4) == 0) && (y % (height / 4) == 0))
+                    try
                     {
-                        samplePoints.Add(new TemperaturePoint { X = x, Y = y, Temperature = t });
+                        double t = image.GetTemperature(x, y);
+                        if (useFahrenheit) t = t * 9 / 5 + 32;
+
+                        if (t < min) min = t;
+                        if (t > max) max = t;
+                        sum += t;
+                        count++;
+                        processedPixels++;
+
+                        // ذخیره چند نقطه نمونه
+                        if (samplePoints.Count < 20 && (x % (width / 4) == 0) && (y % (height / 4) == 0))
+                        {
+                            samplePoints.Add(new TemperaturePoint { X = x, Y = y, Temperature = t });
+                        }
+                    }
+                    catch
+                    {
+                        // پیکسل‌هایی با دادهای نامعتبر را نادیده بگیر
+                        processedPixels++;
                     }
                 }
 
@@ -285,10 +311,18 @@ namespace BmtExtractor
                 {
                     for (int x = 0; x < width; x += step)
                     {
-                        double t = image.GetTemperature(x, y);
-                        if (useFahrenheit) t = t * 9 / 5 + 32;
+                        try
+                        {
+                            double t = image.GetTemperature(x, y);
+                            if (useFahrenheit) t = t * 9 / 5 + 32;
 
-                        sw.WriteLine($"{y},{x},{t:F2}");
+                            sw.WriteLine($"{y},{x},{t:F2}");
+                        }
+                        catch
+                        {
+                            // پیکسل‌هایی با دادهای نامعتبر را بپر
+                            sw.WriteLine($"{y},{x},NaN");
+                        }
                         processedPixels++;
 
                         // نمایش پیشرفت
@@ -308,6 +342,64 @@ namespace BmtExtractor
             }
 
             Console.WriteLine("\n✅ CSV file saved.");
+        }
+
+        static void GenerateSpecificPaletteImage(ThermalImageApi image, BmtFileData data, string paletteName, bool useFahrenheit)
+        {
+            Console.WriteLine($"🎨 Generating specific palette image: {paletteName}...");
+
+            if (!TestoPalettes.ContainsKey(paletteName))
+            {
+                Console.WriteLine($"⚠️ Unknown palette '{paletteName}', using iron as default");
+                paletteName = "iron";
+            }
+
+            Palette originalPalette = image.Palette;
+
+            try
+            {
+                image.Palette = TestoPalettes[paletteName];
+
+                using (Bitmap thermalBmp = image.GetThermalImage(useFahrenheit ? Unit.GradF : Unit.GradC))
+                {
+                    string thermalPath = Path.Combine(data.FileInfo.OutputFolder,
+                        $"{Path.GetFileNameWithoutExtension(data.FileInfo.FileName)}_thermal_{paletteName}.png");
+                    thermalBmp.Save(thermalPath);
+                    data.Images[paletteName] = thermalPath;
+                }
+
+                Console.WriteLine($"✅ Generated palette: {paletteName}");
+                GC.Collect();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"⚠️ Failed to generate {paletteName}: {ex.Message}");
+            }
+            finally
+            {
+                // بازگردانی پالت اصلی
+                image.Palette = originalPalette;
+            }
+
+            // همچنین تصویر Visual را تولید کن (اگر موجود باشد)
+            try
+            {
+                using (Bitmap visual = image.GetVisualImage())
+                {
+                    if (visual != null)
+                    {
+                        string visualPath = Path.Combine(data.FileInfo.OutputFolder,
+                            Path.GetFileNameWithoutExtension(data.FileInfo.FileName) + "_visual.png");
+                        visual.Save(visualPath);
+                        data.Images["visual"] = visualPath;
+                        Console.WriteLine("✅ Generated: visual image");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"⚠️ Failed to get visual image: {ex.Message}");
+            }
         }
 
         static void GeneratePaletteImages(ThermalImageApi image, BmtFileData data, bool useFahrenheit)

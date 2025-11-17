@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, Form, HTTPException, status
+from fastapi import APIRouter, UploadFile, Form, HTTPException, status, Request, File
 from pathlib import Path
 import shutil
 import subprocess
@@ -6,6 +6,7 @@ import uuid
 import re
 import logging
 import json
+import time
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -18,10 +19,17 @@ PROJECTS_DIR = BASE_DIR / "projects"
 PROJECTS_DIR.mkdir(exist_ok=True)
 
 
-def url_path(file_path: Path) -> str:
-    """Convert file path to URL path"""
+def url_path(file_path: Path, add_timestamp: bool = True) -> str:
+    """Convert file path to URL path with optional cache-busting timestamp"""
     relative_path = file_path.relative_to(PROJECTS_DIR)
-    return f"/files/projects/{relative_path.as_posix()}"
+    url = f"/files/projects/{relative_path.as_posix()}"
+    
+    # Add timestamp to prevent browser caching issues
+    if add_timestamp:
+        timestamp = int(time.time() * 1000)  # milliseconds
+        url = f"{url}?t={timestamp}"
+    
+    return url
 
 
 def validate_extractor():
@@ -64,6 +72,47 @@ def validate_output_files(output_dir: Path) -> dict:
     validation["has_json"] = len(json_files) > 0
 
     return validation
+
+
+def normalize_metadata(raw_metadata: dict) -> dict:
+    """
+    Normalize metadata from C# extractor format to client format.
+    Converts PascalCase C# properties to snake_case properties that client expects.
+    """
+    if not raw_metadata:
+        return {}
+    
+    normalized = {}
+    
+    # Extract measurement info
+    measurement_info = raw_metadata.get("MeasurementInfo", {})
+    if measurement_info:
+        normalized["emissivity"] = measurement_info.get("Emissivity", 0.95)
+        normalized["reflected_temp"] = measurement_info.get("ReflectedTemperature", 20)
+        normalized["humidity"] = measurement_info.get("Humidity", 0.5)
+    
+    # Extract device info
+    device_info = raw_metadata.get("DeviceInfo", {})
+    if device_info:
+        normalized["device"] = device_info.get("DeviceName", "Thermal Camera")
+    
+    # Extract image info
+    image_info = raw_metadata.get("ImageInfo", {})
+    if image_info:
+        normalized["captured_at"] = image_info.get("CreationDateTime")
+        normalized["width"] = image_info.get("Width")
+        normalized["height"] = image_info.get("Height")
+    
+    # Extract temperature stats
+    temp_stats = raw_metadata.get("TemperatureStats", {})
+    if temp_stats:
+        normalized["min_temp"] = temp_stats.get("Min")
+        normalized["max_temp"] = temp_stats.get("Max")
+        normalized["avg_temp"] = temp_stats.get("Average")
+    
+    logger.info(f"Normalized metadata: emissivity={normalized.get('emissivity')}, reflected_temp={normalized.get('reflected_temp')}")
+    
+    return normalized
 
 
 @router.post("")
@@ -124,7 +173,7 @@ async def upload_bmt(file: UploadFile, project_name: str = Form(...)):
         logger.info(f"Input: {bmt_path}, Output: {output_dir}")
 
         try:
-            process = subprocess.run(
+                process = subprocess.run(
                 [
                     str(EXTRACTOR_PATH),
                     str(bmt_path),
@@ -132,9 +181,22 @@ async def upload_bmt(file: UploadFile, project_name: str = Form(...)):
                 ],
                 capture_output=True,
                 text=True,
+                encoding="utf-8", # <-- این خط اضافه شد
                 cwd=EXTRACTOR_PATH.parent,
                 timeout=60  # 60 second timeout
             )
+
+            # process = subprocess.run(
+            #     [
+            #         str(EXTRACTOR_PATH),
+            #         str(bmt_path),
+            #         str(output_dir)
+            #     ],
+            #     capture_output=True,
+            #     text=True,
+            #     cwd=EXTRACTOR_PATH.parent,
+            #     timeout=60  # 60 second timeout
+            # )
         except subprocess.TimeoutExpired:
             logger.error("C# extractor timed out")
             raise HTTPException(
@@ -154,20 +216,31 @@ async def upload_bmt(file: UploadFile, project_name: str = Form(...)):
             logger.error(f"STDERR: {process.stderr}")
             logger.error(f"STDOUT: {process.stdout}")
 
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail={
-                    "message": "BMT extraction failed",
-                    "return_code": process.returncode,
-                    "stderr": process.stderr,
-                    "stdout": process.stdout
-                }
-            )
+            # Even if extractor fails, continue to see if we got any output
+            # This allows partial processing to continue
+            validation = validate_output_files(output_dir)
+            
+            if validation["has_thermal"]:
+                logger.warning(f"Extractor reported error but still produced some thermal images")
+                # Continue processing with what we have
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail={
+                        "message": "BMT extraction failed",
+                        "return_code": process.returncode,
+                        "stderr": process.stderr,
+                        "stdout": process.stdout
+                    }
+                )
 
         # Validate output files
         validation = validate_output_files(output_dir)
         if validation["errors"]:
             logger.warning(f"Extractor output validation warnings: {validation['errors']}")
+            # Log all files that were created for debugging
+            all_files = list(output_dir.glob("*"))
+            logger.warning(f"Files in output directory: {[f.name for f in all_files]}")
 
         # --- جمع‌آوری فایل‌ها ---
         images = []
@@ -197,7 +270,8 @@ async def upload_bmt(file: UploadFile, project_name: str = Form(...)):
                             "name": base_name,
                             "palettes": {},
                             "csv_url": None,
-                            "json_url": None
+                            "json_url": None,
+                            "metadata": {}
                         }
                         thermal_images.append(existing)
                     existing["palettes"][palette] = url_path(file_path)
@@ -245,12 +319,22 @@ async def upload_bmt(file: UploadFile, project_name: str = Form(...)):
             existing = next((item for item in thermal_images if item["name"] == base_name), None)
             if existing:
                 existing["json_url"] = json_url
+                # Parse and attach metadata to thermal image, with normalization
+                try:
+                    with open(json_file, 'r', encoding='utf-8') as f:
+                        raw_metadata = json.load(f)
+                        # Normalize metadata from C# format to client format
+                        existing["metadata"] = normalize_metadata(raw_metadata)
+                except Exception as e:
+                    logger.warning(f"Failed to parse metadata for {json_file.name}: {e}")
                 logger.info(f"Linked JSON metadata to thermal image: {json_file.name}")
+                logger.debug(f"Metadata: {existing.get('metadata')}")
 
         # ترکیب thermal images با images اصلی
         images.extend(thermal_images)
 
         logger.info(f"Processing complete: {len(images)} images, {len(csv_files)} CSV, {len(json_files)} JSON")
+        logger.info(f"Images in response: {[img.get('name', img.get('type')) for img in images]}")
 
         return {
             "status": "success",
@@ -319,7 +403,8 @@ async def get_project_images(project_name: str):
                             "name": base_name,
                             "palettes": {},
                             "csv_url": None,
-                            "json_url": None
+                            "json_url": None,
+                            "metadata": {}
                         }
                         thermal_images.append(existing)
                     existing["palettes"][palette] = url_path(file_path)
@@ -358,6 +443,15 @@ async def get_project_images(project_name: str):
             existing = next((item for item in thermal_images if item["name"] == base_name), None)
             if existing:
                 existing["json_url"] = json_url
+                # Parse and attach metadata to thermal image, with normalization
+                try:
+                    with open(json_file, 'r', encoding='utf-8') as f:
+                        raw_metadata = json.load(f)
+                        # Normalize metadata from C# format to client format
+                        existing["metadata"] = normalize_metadata(raw_metadata)
+                except Exception as e:
+                    logger.warning(f"Failed to parse metadata for {json_file.name}: {e}")
+                logger.info(f"Linked JSON metadata to thermal image: {json_file.name}")
 
         # ترکیب تصاویر واقعی و حرارتی
         images.extend(thermal_images)
@@ -378,3 +472,145 @@ async def get_project_images(project_name: str):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+
+
+@router.post("/rerender-palette")
+async def rerender_with_palette(
+    request: Request,
+    bmt_file: UploadFile = File(None),
+    project_name: str = Form(...),
+    palette: str = Form("iron")
+):
+    """
+    Re-render thermal image with a different color palette
+    
+    این endpoint فایل BMT را دوباره پردازش می‌کند اما فقط با پالت مشخص شده
+    تا کاربر بتواند بدون آپلود مجدد، پالت را تغییر دهد.
+    
+    Args:
+        file: BMT file (can be the same file again)
+        project_name: Name of the project
+        palette: Color palette name (iron, rainbow, grayscale, etc.)
+        
+    Returns:
+        JSON response with the new thermal image URL for the requested palette
+    """
+    
+    # If client did not upload the BMT file, try to use an existing BMT in the project folder
+    project_id = project_name
+    project_path = PROJECTS_DIR / project_id
+    project_path.mkdir(parents=True, exist_ok=True)
+
+    selected_bmt_path = None
+    # If file provided, save it to project
+    if bmt_file and getattr(bmt_file, 'filename', None):
+        if not bmt_file.filename.lower().endswith('.bmt'):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only .BMT files are supported"
+            )
+        bmt_path = project_path / bmt_file.filename
+        try:
+            with open(bmt_path, "wb") as f:
+                shutil.copyfileobj(bmt_file.file, f)
+            selected_bmt_path = bmt_path
+        except Exception as e:
+            logger.error(f"Failed to save BMT file: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to save file: {str(e)}"
+            )
+    else:
+        # Try to find an existing .bmt file in the project folder
+        candidates = list(project_path.glob('*.bmt'))
+        if candidates:
+            # pick the latest modified one
+            candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+            selected_bmt_path = candidates[0]
+
+    if not selected_bmt_path:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No BMT file provided and no existing project BMT found"
+        )
+    
+    # Validate extractor exists
+    validate_extractor()
+    
+    try:
+        # مسیر خروجی
+        output_dir = project_path / "output"
+        output_dir.mkdir(exist_ok=True)
+
+        # اجرای C# extractor برای تولید تصویر با پالت جدید
+        logger.info(f"Running C# extractor with palette: {palette} using {selected_bmt_path}")
+
+        try:
+            process = subprocess.run(
+                [
+                    str(EXTRACTOR_PATH),
+                    str(selected_bmt_path),
+                    str(output_dir),
+                    palette  # Pass palette as argument to C# app
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                cwd=EXTRACTOR_PATH.parent,
+                timeout=60
+            )
+        except subprocess.TimeoutExpired:
+            logger.error("C# extractor timed out")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Palette rendering timed out"
+            )
+        except Exception as e:
+            logger.error(f"Failed to run C# extractor: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to render palette: {str(e)}"
+            )
+        
+        # Check for errors
+        if process.returncode != 0:
+            logger.error(f"Extractor failed: {process.stderr}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to generate palette image"
+            )
+        
+        # پیدا کردن تصویر حرارتی با پالت درخواستی
+        thermal_pattern = f"*_thermal_{palette}.png"
+        thermal_files = list(output_dir.glob(thermal_pattern))
+        
+        if not thermal_files:
+            # Maybe the file naming is different, search for any thermal files
+            all_thermal = list(output_dir.glob("*_thermal_*.png"))
+            logger.warning(f"Palette '{palette}' not found. Available: {[f.name for f in all_thermal]}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Thermal image with palette '{palette}' not generated"
+            )
+        
+        # Get the thermal image URL with cache-busting
+        thermal_url = url_path(thermal_files[0], add_timestamp=True)
+        
+        logger.info(f"Palette rendering complete: {thermal_files[0].name}")
+        
+        return {
+            "status": "success",
+            "thermal_url": thermal_url,
+            "palette": palette,
+            "project_id": project_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in rerender_palette: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error: {str(e)}"
+        )
+

@@ -125,6 +125,14 @@ async def bulk_save_project(
 ):
     """
     Bulk save operation for project with all related data (images, markers, regions)
+    
+    This endpoint saves:
+    - Project metadata (name, operator, company, notes)
+    - All thermal images with their data
+    - All markers with temperatures and positions
+    - All regions with statistics
+    
+    All data is persisted to the database for future retrieval.
     """
     file_manager = FileManager()
 
@@ -323,5 +331,5 @@ async def bulk_save_project(
     return BulkSaveResponse(
         success=True,
         project=project,
-        message="Project saved successfully"
+        message="Project saved successfully with all images, markers, and regions"
     )

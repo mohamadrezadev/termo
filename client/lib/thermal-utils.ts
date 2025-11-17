@@ -29,6 +29,7 @@ export interface ThermalImage {
   serverRenderedThermalUrl?: string | null; // New field
   serverPalettes?: Record<string, string>; // Store all palette URLs from server (e.g., {iron: "/files/...", rainbow: "/files/..."})
   csvUrl?: string | null; // Store CSV URL for reference
+  metadata?: ThermalMetadata; // Image metadata (emissivity, temperature, etc.)
 }
 // به lib/thermal-utils.ts این توابع را اضافه/جایگزین کنید
 
@@ -473,6 +474,7 @@ export function fahrenheitToCelsius(fahrenheit: number): number {
   return (fahrenheit - 32) * 5/9;
 }
 
+
 export function formatTemperature(celsius: number, unit: 'C' | 'F' = 'F'): string {
   if (unit === 'F') {
     return `${celsiusToFahrenheit(celsius).toFixed(1)}°F`;
@@ -481,7 +483,14 @@ export function formatTemperature(celsius: number, unit: 'C' | 'F' = 'F'): strin
 }
 
 // Format temperature with both Celsius and Fahrenheit
-export function formatTemperatureDual(celsius: number): string {
-  const fahrenheit = celsiusToFahrenheit(celsius);
-  return `${celsius.toFixed(1)}°C (${fahrenheit.toFixed(1)}°F)`;
+
+export function formatTemperatureDual(celsius: any): string {
+  const temp = Number(celsius); // تبدیل صریح به عدد
+  
+  if (isNaN(temp) || temp === null || temp === undefined) {
+    return 'N/A';
+  }
+  
+  const fahrenheit = celsiusToFahrenheit(temp);
+  return `${temp.toFixed(1)}°C (${fahrenheit.toFixed(1)}°F)`;
 }

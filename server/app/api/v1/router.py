@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.routes import (
-    project,
+    projects,
     thermal,
     markers,
     regions,
@@ -12,8 +12,8 @@ from app.api.routes import (
 api_router = APIRouter()
 
 api_router.include_router(
-    project.router,
-    prefix="/projects",
+    projects.router,
+    prefix="/project",
     tags=["projects"]
 )
 

@@ -5,14 +5,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.params import Depends
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session
-from app.db import init_db
-from app.models.project import Project
-from app.db.session import get_db
 from pathlib import Path as SysPath  # تغییر نام برای جلوگیری از تداخل
 
 from app.core.config import settings
-from app.db.init_db import init_db
 from app.api.v1.router import api_router
+from app.db.session import get_db
+from app.models.project import Project
+from app.db.persistence import init_db
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

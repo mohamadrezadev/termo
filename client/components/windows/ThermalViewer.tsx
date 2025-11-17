@@ -32,7 +32,7 @@ import {
   Upload
 } from 'lucide-react';
 import { cn, generateId } from '@/lib/utils';
-import { post, getAbsoluteUrl } from '@/lib/api-service';
+import { post, getAbsoluteUrl, rerenderPalette } from '@/lib/api-service';
 
 export default function ThermalViewer() {
   const {
@@ -53,7 +53,8 @@ export default function ThermalViewer() {
     addImage,
     addMarker,
     addRegion,
-    setActiveImage
+    setActiveImage,
+    updateImagePalettes
   } = useAppStore();
   
   const { zoom, panX, panY } = thermalView;
@@ -82,6 +83,17 @@ export default function ThermalViewer() {
       return;
     }
 
+    // Log the check
+    console.log('[THERMAL_VIEWER] Effect triggered:', {
+      activeImageId: activeImage?.id,
+      currentPalette,
+      hasServerPalettes: !!activeImage?.serverPalettes,
+      serverPalettesKeys: activeImage?.serverPalettes ? Object.keys(activeImage.serverPalettes) : [],
+      hasThermalData: !!activeImage?.thermalData,
+      customMinTemp,
+      customMaxTemp
+    });
+
     // Check if we need to use custom temperature range or client-side rendering
     const needsCustomRendering = activeImage?.thermalData && palette && (
       customMinTemp !== null ||
@@ -93,13 +105,18 @@ export default function ThermalViewer() {
 
     if (serverPaletteUrl && !needsCustomRendering) {
       // Use server-rendered palette image (FAST!)
-      console.log('[THERMAL_VIEWER] Using server palette:', currentPalette);
+      console.log('[THERMAL_VIEWER] Using server palette:', currentPalette, 'URL:', serverPaletteUrl);
       setImageLoading(true);
+
+      // Add cache-busting parameter to force reload on every palette change
+      const baseUrl = serverPaletteUrl.split('?')[0];
+      const urlWithCacheBuster = `${baseUrl}?t=${Date.now()}`;
 
       const img = new Image();
       img.crossOrigin = "anonymous";
 
       img.onload = () => {
+        console.log('[THERMAL_VIEWER] Image loaded successfully');
         canvas.width = img.width;
         canvas.height = img.height;
         const ctx = canvas.getContext('2d');
@@ -109,8 +126,8 @@ export default function ThermalViewer() {
         setImageLoading(false);
       };
 
-      img.onerror = () => {
-        console.error('[THERMAL_VIEWER] Error loading server palette image.');
+      img.onerror = (e) => {
+        console.error('[THERMAL_VIEWER] Error loading server palette image:', urlWithCacheBuster, e);
         setImageLoading(false);
         const ctx = canvas.getContext('2d');
         if (ctx) {
@@ -118,7 +135,8 @@ export default function ThermalViewer() {
         }
       };
 
-      img.src = serverPaletteUrl;
+      console.log('[THERMAL_VIEWER] Loading image from:', urlWithCacheBuster);
+      img.src = urlWithCacheBuster;
     } else if (activeImage?.thermalData && palette) {
       // Client-side rendering with custom palette/temperature range (SLOWER)
       console.log('[THERMAL_VIEWER] Client-side rendering with palette:', currentPalette);
@@ -163,52 +181,9 @@ export default function ThermalViewer() {
 
   // renderThermal and its useEffect will be removed, handled by ThermalImageRenderer
 
-  useEffect(() => {
-    const canvas = mainCanvasRef.current;
-    if (!canvas) {
-      return;
-    }
-
-    if (activeImage?.serverRenderedThermalUrl) {
-      console.log('[THERMAL_VIEWER] Rendering server-provided thermal image.');
-      const img = new Image();
-      img.crossOrigin = "anonymous"; // Good practice for cross-origin images
-      img.onload = () => {
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, img.width, img.height);
-        }
-      };
-      img.onerror = () => {
-        console.error('[THERMAL_VIEWER] Error loading server-provided thermal image.');
-        // Optionally, clear canvas or fall back to client rendering if desired
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-        }
-      };
-      img.src = activeImage.serverRenderedThermalUrl;
-    } else if (activeImage?.thermalData && palette) {
-      console.log('[THERMAL_VIEWER] Rendering thermal image with client-side palette.');
-      renderThermalCanvas(
-        canvas,
-        activeImage.thermalData,
-        palette, // This is COLOR_PALETTES[currentPalette]
-        customMinTemp ?? activeImage.thermalData.minTemp,
-        customMaxTemp ?? activeImage.thermalData.maxTemp
-      );
-    } else {
-      // Clear canvas if no image data or server URL
-      console.log('[THERMAL_VIEWER] No thermal data to render, clearing canvas.');
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-      }
-    }
-  }, [activeImage, palette, customMinTemp, customMaxTemp]); // Dependencies: activeImage, palette, and temp overrides
-  // گرفتن نام پروژه از LocalStorage یا store فعلی
+  // Note: Removed the second rendering effect (line 188+) as it was conflicting with the main palette rendering effect
+  // The main effect (above) now handles both serverPalettes and client-side rendering
+  // سازمان دهنده پروژه از LocalStorage یا store فعلی
   const getProjectName = useCallback((): string => {
     // First try to get from current project in store
     const { currentProject } = useAppStore.getState();
@@ -245,6 +220,67 @@ export default function ThermalViewer() {
     return 'default_project';
   }, []);
 
+  // Handler for palette change - requests from server if not available
+  const handlePaletteChange = useCallback(async (newPalette: string) => {
+    if (!activeImage) {
+      // No active image, just change the palette setting
+      setPalette(newPalette);
+      return;
+    }
+
+    // Check if the palette is already available from server
+    if (activeImage.serverPalettes?.[newPalette]) {
+      console.log(`[PALETTE] Palette '${newPalette}' already available from server`);
+      setPalette(newPalette);
+      return;
+    }
+
+    // Check if we need to request from server or use client-side rendering
+    if (activeImage.thermalData) {
+      // We have thermal data, can render client-side
+      console.log(`[PALETTE] Using client-side rendering for palette '${newPalette}'`);
+      setPalette(newPalette);
+      return;
+    }
+
+    // We need to request the palette from server (server can use stored .bmt for the project)
+    try {
+      console.log(`[PALETTE] Requesting palette '${newPalette}' from server for project`);
+      const projectName = getProjectName();
+      const resp = await rerenderPalette(null, projectName, newPalette);
+      console.log('[PALETTE] Rerender response:', resp);
+
+      if (resp?.status === 'success') {
+        const thermalResult = resp.images?.find((img: any) => img.type === 'thermal');
+        const realResult = resp.images?.find((img: any) => img.type === 'real');
+
+        // Convert relative palette URLs to absolute and attach cache-buster when used
+        const absolutePalettes: Record<string, string> = {};
+        if (thermalResult?.palettes) {
+          Object.entries(thermalResult.palettes).forEach(([pName, rel]: any) => {
+            const abs = getAbsoluteUrl(rel as string);
+            if (abs) absolutePalettes[pName] = abs;
+          });
+        }
+
+        // Merge/update store with new palette URLs for the active image
+        updateImagePalettes(activeImage.id, absolutePalettes);
+
+        // If server provided a rendered thermal image, set it as the chosen palette
+        if (absolutePalettes[newPalette]) {
+          setPalette(newPalette);
+          return;
+        }
+      }
+
+      console.warn(`[PALETTE] Server could not provide palette '${newPalette}', falling back to client render`);
+      setPalette(newPalette);
+    } catch (err) {
+      console.error('[PALETTE] Error requesting palette from server:', err);
+      setPalette(newPalette);
+    }
+  }, [activeImage, setPalette, getProjectName, updateImagePalettes]);
+
   const handleFileUpload = useCallback(async (files: FileList) => {
     const projectName = getProjectName();
     console.log(`[UPLOAD] Starting file upload for project: ${projectName}`);
@@ -274,10 +310,20 @@ export default function ThermalViewer() {
           throw new Error(result.message || 'Server processing failed');
         }
 
+        // Log the images array for debugging
+        console.log('[UPLOAD] All images from server:', result.images);
+        
       const thermalResult = result.images?.find((img: any) => img.type === 'thermal');
       const realResult = result.images?.find((img: any) => img.type === 'real');
       console.log('[UPLOAD] Thermal result from server:', thermalResult);
       console.log('[UPLOAD] Real result from server:', realResult);
+
+      // Validate that we got at least a thermal result
+      if (!thermalResult) {
+        console.error('[UPLOAD] Server did not generate thermal images. Check extractor output.');
+        console.error('[UPLOAD] Validation from server:', result.validation);
+        throw new Error(`Server did not generate thermal images for ${file.name}. Check file format.`);
+      }
 
       // استخراج URL تصویر thermal از palettes (استفاده از iron به عنوان پیش‌فرض)
       const thermalImageRelativeUrl = thermalResult?.palettes?.iron ||
@@ -296,24 +342,25 @@ export default function ThermalViewer() {
       if (thermalImageUrl || realImageUrl) {
         let thermalData: ThermalData | null = null;
 
+        // Extract metadata once
+        const metadata = {
+          emissivity: thermalResult.metadata?.emissivity ?? 0.95,
+          ambientTemp: 20,
+          reflectedTemp: thermalResult.metadata?.reflected_temp ?? 20,
+          humidity: thermalResult.metadata?.humidity ?? 0.5,
+          distance: 1.0,
+          cameraModel: thermalResult.metadata?.device || 'Thermal Camera',
+          timestamp: thermalResult.metadata?.captured_at
+            ? new Date(thermalResult.metadata.captured_at)
+            : new Date()
+        };
+
+        console.log('[UPLOAD] Metadata extracted:', metadata);
+
         // استفاده از CSV برای دقت بالاتر
         if (csvUrl) {
           try {
             console.log(`[UPLOAD] Processing thermal data from CSV: ${csvUrl}`);
-
-            // ساخت metadata از اطلاعات سرور
-            const metadata = {
-              emissivity: thermalResult.metadata?.emissivity ?? 0.95,
-              ambientTemp: thermalResult.metadata?.reflected_temp ?? 20,
-              reflectedTemp: thermalResult.metadata?.reflected_temp ?? 20,
-              humidity: 0.5,
-              distance: 1.0,
-              cameraModel: thermalResult.metadata?.device || 'Thermal Camera',
-              timestamp: thermalResult.metadata?.captured_at
-                ? new Date(thermalResult.metadata.captured_at)
-                : new Date()
-            };
-
             thermalData = await processThermalDataFromCSV(csvUrl, metadata);
             console.log('[UPLOAD] Thermal data processed from CSV successfully');
           } catch (csvErr) {
@@ -365,6 +412,7 @@ export default function ThermalViewer() {
           serverRenderedThermalUrl: thermalImageUrl ?? null,
           serverPalettes: absolutePalettes, // Store all server palette URLs
           csvUrl: csvUrl,
+          metadata: metadata // Include metadata in image object
         };
 
         console.log('[UPLOAD] Adding new image to store:', {
@@ -373,6 +421,7 @@ export default function ThermalViewer() {
           hasThermalData: !!newImage.thermalData,
           hasRealImage: !!newImage.realImage,
           serverPalettes: Object.keys(absolutePalettes),
+          hasMetadata: !!newImage.metadata,
           thermalDataSource: thermalResult?.csv_url ? 'CSV' : 'BMP'
         });
 
@@ -391,7 +440,7 @@ export default function ThermalViewer() {
   }
 
     setIsLoading(false); // End loading after all files processed
-}, [addImage, setActiveImage]);
+  }, [addImage, setActiveImage, getProjectName]);
  
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -558,7 +607,7 @@ export default function ThermalViewer() {
         return { ...prevRegion, points: updatedPoints };
       });
     }
-  }, [activeImage, activeTool, isDrawing, currentRegion, setCurrentTemp, setMousePos, getTemperatureAtPixel, setCurrentRegion]); // Added setCurrentRegion
+  }, [activeImage, activeTool, isDrawing, currentRegion, setCurrentTemp, setMousePos, setCurrentRegion]); // Cleaned dependencies
 
   const handleMainCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!mainCanvasRef.current || !activeImage?.thermalData) return;
@@ -596,14 +645,14 @@ export default function ThermalViewer() {
         return { ...prevRegion, points: [...prevRegion.points, { x: canvasX, y: canvasY }] };
       });
     }
-  }, [activeImage, activeTool, markers, addMarker, isDrawing, currentRegion, setCurrentRegion, getTemperatureAtPixel, generateId]); // Added getTemperatureAtPixel, generateId
+  }, [activeImage, activeTool, markers, addMarker, isDrawing, currentRegion, setCurrentRegion]);
 
   const handleMainCanvasMouseLeave = useCallback(() => {
       setCurrentTemp(null);
       // setMousePos({ x: 0, y: 0 }); // Optional: reset mousePos if needed
   }, [setCurrentTemp]);
 
-  const calculateRegionTemperatures = (thermalData: any, points: { x: number; y: number }[], type: string) => {
+  const calculateRegionTemperatures = useCallback((thermalData: any, points: { x: number; y: number }[], type: string) => {
     const temps: number[] = [];
 
     if (type === 'rectangle' && points.length === 2) {
@@ -628,15 +677,15 @@ export default function ThermalViewer() {
       max: Math.max(...temps),
       avg: temps.reduce((sum, temp) => sum + temp, 0) / temps.length
     };
-  };
+  }, []);
 
-  const calculateRectangleArea = (points: { x: number; y: number }[]) => {
+  const calculateRectangleArea = useCallback((points: { x: number; y: number }[]) => {
     if (points.length !== 2) return 0;
     const [p1, p2] = points;
     return Math.abs((p2.x - p1.x) * (p2.y - p1.y));
-  };
+  }, []);
 
-  const calculatePolygonArea = (points: { x: number; y: number }[]) => {
+  const calculatePolygonArea = useCallback((points: { x: number; y: number }[]) => {
     if (points.length < 3) return 0;
     let area = 0;
     for (let i = 0; i < points.length; i++) {
@@ -645,7 +694,7 @@ export default function ThermalViewer() {
       area -= points[j].x * points[i].y;
     }
     return Math.abs(area) / 2;
-  };
+  }, []);
 
   const handleContainerMouseUp = useCallback(() => {
     setIsDragging(false);
@@ -793,7 +842,7 @@ export default function ThermalViewer() {
               <div className="flex items-center space-x-2 px-2 border-r border-gray-600">
                 <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"></div>
                 <span className="text-xs text-gray-400">
-                  {isLoading ? t.loading || 'Loading...' : 'Rendering...'}
+                  {isLoading ? 'Loading...' : 'Rendering...'}
                 </span>
               </div>
             )}
@@ -804,7 +853,7 @@ export default function ThermalViewer() {
                 <Thermometer className="w-3 h-3 text-gray-400" />
                 <select
                   value={currentPalette}
-                  onChange={(e) => setPalette(e.target.value)}
+                  onChange={(e) => handlePaletteChange(e.target.value)}
                   className="text-xs bg-gray-700 text-gray-300 border border-gray-600 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   title="Color Palette"
                   disabled={isLoading || imageLoading}
@@ -1129,6 +1178,19 @@ export default function ThermalViewer() {
             )}
             {isDrawing && activeImage?.thermalData && ( // Only show drawing status if there's an image
               <span className="text-yellow-400">Drawing {activeTool}...</span>
+            )}
+            {/* Show emissivity and reflected temperature from metadata */}
+            {activeImage?.thermalData?.metadata && (
+              <>
+                <span className="text-blue-400">
+                  ε: {activeImage.thermalData.metadata.emissivity?.toFixed(3) || '0.950'}
+                </span>
+                {activeImage.thermalData.metadata.reflectedTemp !== undefined && (
+                  <span className="text-orange-400">
+                    Refl: {formatTemperatureDual(activeImage.thermalData.metadata.reflectedTemp)}
+                  </span>
+                )}
+              </>
             )}
           </div>
           <div className="flex items-center space-x-4">

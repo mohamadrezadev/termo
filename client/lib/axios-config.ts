@@ -2,8 +2,16 @@
 
 import axios, { AxiosInstance, AxiosError, AxiosResponse } from 'axios';
 
-// دریافت URL پایه API از متغیرهای محیطی
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
+// دریافت URL پایه API از متغیرهای محیطی. پیش‌فرض را روی سرور FastAPI (پورت 8000) می‌گذاریم.
+function resolveApiBaseUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (envUrl) {
+    return envUrl.replace(/\/$/, ''); // جلوگیری از // در baseURL
+  }
+  return 'http://localhost:8000/api/v1';
+}
+
+export const API_BASE_URL = resolveApiBaseUrl();
 
 // ایجاد instance Axios
 export const apiClient: AxiosInstance = axios.create({
