@@ -30,6 +30,8 @@ class ImageResponse(ImageBase):
     thermal_image_path: Optional[str] = None
     server_rendered_path: Optional[str] = None
     thermal_data: Optional[Dict[str, Any]] = None
+    server_palettes: Optional[Dict[str, str]] = None
+    csv_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     

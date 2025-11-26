@@ -26,6 +26,8 @@ interface SerializedImage {
   name: string;
   thermalImageBase64?: string;
   realImageBase64?: string;
+  serverPalettes?: Record<string, string>;
+  csvUrl?: string | null;
   thermalData?: {
     width: number;
     height: number;
@@ -200,13 +202,18 @@ export async function serializeProject(
         name: img.name,
         thermalImageBase64,
         realImageBase64,
+        serverPalettes: img.serverPalettes || undefined,
+        csvUrl: img.csvUrl || undefined,
         thermalData
       };
       
       console.log(`[PROJECT_SERVICE_API] Image ${img.name} serialized:`, {
         hasThermalImage: !!thermalImageBase64,
         hasRealImage: !!realImageBase64,
-        hasThermalData: !!thermalData
+        hasThermalData: !!thermalData,
+        hasServerPalettes: !!serialized.serverPalettes,
+        serverPalettesKeys: serialized.serverPalettes ? Object.keys(serialized.serverPalettes) : [],
+        hasCsvUrl: !!serialized.csvUrl
       });
       
       return serialized;
@@ -268,13 +275,19 @@ export function deserializeProject(serialized: SerializedProject): {
       name: img.name,
       thermalData: thermalData,
       realImage: img.realImageBase64 || null,
-      serverRenderedThermalUrl: img.thermalImageBase64 || null
+      serverRenderedThermalUrl: img.thermalImageBase64 || null,
+      serverPalettes: img.serverPalettes || undefined,
+      csvUrl: img.csvUrl || undefined
     };
     
     console.log(`[PROJECT_SERVICE_API] Image ${img.name} deserialized:`, {
       hasRealImage: !!thermalImage.realImage,
       hasThermalImage: !!thermalImage.serverRenderedThermalUrl,
-      hasThermalData: !!thermalImage.thermalData
+      hasThermalData: !!thermalImage.thermalData,
+      hasServerPalettes: !!thermalImage.serverPalettes,
+      serverPalettesKeys: thermalImage.serverPalettes ? Object.keys(thermalImage.serverPalettes) : [],
+      hasCsvUrl: !!thermalImage.csvUrl,
+      serverRenderedUrlPreview: thermalImage.serverRenderedThermalUrl?.substring(0, 50)
     });
     
     return thermalImage;

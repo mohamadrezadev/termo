@@ -491,6 +491,11 @@ export function formatTemperatureDual(celsius: any): string {
     return 'N/A';
   }
   
+  // بررسی اینکه دما در محدوده منطقی است (بین -273.15°C تا 3000°C)
+  if (temp < -273.15 || temp > 3000) {
+    console.warn(`[THERMAL_UTILS] Temperature out of range: ${temp}°C`);
+  }
+  
   const fahrenheit = celsiusToFahrenheit(temp);
   return `${temp.toFixed(1)}°C (${fahrenheit.toFixed(1)}°F)`;
 }

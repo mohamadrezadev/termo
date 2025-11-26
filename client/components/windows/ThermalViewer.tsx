@@ -91,6 +91,8 @@ export default function ThermalViewer() {
       hasServerPalettes: !!activeImage?.serverPalettes,
       serverPalettesKeys: activeImage?.serverPalettes ? Object.keys(activeImage.serverPalettes) : [],
       hasThermalData: !!activeImage?.thermalData,
+      hasServerRenderedUrl: !!activeImage?.serverRenderedThermalUrl,
+      serverRenderedUrl: activeImage?.serverRenderedThermalUrl?.substring(0, 100),
       customMinTemp,
       customMaxTemp
     });
@@ -138,6 +140,42 @@ export default function ThermalViewer() {
 
       console.log('[THERMAL_VIEWER] Loading image from:', urlWithCacheBuster);
       img.src = urlWithCacheBuster;
+    } else if (!serverPaletteUrl && activeImage?.serverRenderedThermalUrl && !needsCustomRendering) {
+      // Fallback: استفاده از تصویر اصلی اگر serverPalettes موجود نیست
+      console.log('[THERMAL_VIEWER] No server palettes, using serverRenderedThermalUrl');
+      setImageLoading(true);
+
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+
+      img.onload = () => {
+        console.log('[THERMAL_VIEWER] Thermal image loaded successfully');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, img.width, img.height);
+        }
+        setImageLoading(false);
+      };
+
+      img.onerror = (e) => {
+        console.error('[THERMAL_VIEWER] Error loading thermal image:', e);
+        setImageLoading(false);
+        // Try client-side rendering as last resort
+        if (activeImage?.thermalData && palette) {
+          console.log('[THERMAL_VIEWER] Falling back to client-side rendering');
+          renderThermalCanvas(
+            canvas,
+            activeImage.thermalData,
+            palette,
+            customMinTemp ?? activeImage.thermalData.minTemp,
+            customMaxTemp ?? activeImage.thermalData.maxTemp
+          );
+        }
+      };
+
+      img.src = activeImage.serverRenderedThermalUrl;
     } else if (activeImage?.thermalData && palette) {
       // Client-side rendering with custom palette/temperature range (SLOWER)
       console.log('[THERMAL_VIEWER] Client-side rendering with palette:', currentPalette);
@@ -611,6 +649,17 @@ export default function ThermalViewer() {
     setMousePos({ x: canvasX, y: canvasY });
 
     const temp = getTemperatureAtPixel(activeImage.thermalData, canvasX, canvasY);
+    
+    // Debug: بررسی دمای خام
+    if (temp !== null && (temp < -100 || temp > 500)) {
+      console.warn('[THERMAL_VIEWER] Suspicious temperature detected:', {
+        temp,
+        position: { x: canvasX, y: canvasY },
+        min: activeImage.thermalData.minTemp,
+        max: activeImage.thermalData.maxTemp
+      });
+    }
+    
     setCurrentTemp(temp);
 
     if (isDrawing && currentRegion && (activeTool === 'rectangle' || activeTool === 'polygon')) {

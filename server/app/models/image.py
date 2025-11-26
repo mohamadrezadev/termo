@@ -20,6 +20,12 @@ class ThermalImage(SQLModel, table=True):
 
     # Thermal data stored as JSON
     thermal_data: Optional[Dict[str, Any]] = Field(default=None, sa_column=Column(JSON))
+    
+    # Server palettes URLs (for different color palettes)
+    server_palettes: Optional[Dict[str, str]] = Field(default=None, sa_column=Column(JSON))
+    
+    # CSV URL for temperature data
+    csv_url: Optional[str] = None
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

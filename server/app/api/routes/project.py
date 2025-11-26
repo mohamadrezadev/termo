@@ -227,6 +227,10 @@ async def bulk_save_project(
                         existing_image.name = img_data.name
                         if img_data.thermal_data:
                             existing_image.thermal_data = img_data.thermal_data
+                        if img_data.server_palettes:
+                            existing_image.server_palettes = img_data.server_palettes
+                        if img_data.csv_url:
+                            existing_image.csv_url = img_data.csv_url
                         db.add(existing_image)
                         image_id_map[img_data.id] = existing_image
                         continue
@@ -281,6 +285,12 @@ async def bulk_save_project(
                     new_image.thermal_data = json.loads(img_data.thermal_data_json)
                 except json.JSONDecodeError:
                     print(f"Error parsing thermal data JSON for image {img_data.name}")
+            
+            # Handle server palettes and CSV URL
+            if img_data.server_palettes:
+                new_image.server_palettes = img_data.server_palettes
+            if img_data.csv_url:
+                new_image.csv_url = img_data.csv_url
 
             db.add(new_image)
             db.flush()  # Get the ID without committing

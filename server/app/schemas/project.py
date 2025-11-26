@@ -70,6 +70,8 @@ class BulkImageData(BaseModel):
     real_image_base64: Optional[str] = None
     thermal_data_json: Optional[str] = None
     thermal_data: Optional[Dict[str, Any]] = None
+    server_palettes: Optional[Dict[str, str]] = None
+    csv_url: Optional[str] = None
 
 class BulkMarkerData(BaseModel):
     """Schema for marker data in bulk save"""

@@ -196,9 +196,13 @@ async def serve_image(filename: str):
         raise HTTPException(status_code=404, detail="Image not found")
     return FileResponse(file_path)
 
+@app.get("/")
+async def root():
+    return {"message": "Thermal API Server is running", "status": "ok"}
 
 if __name__ == "__main__":
     import uvicorn
+    print("🚀 Starting Thermal API Server on http://127.0.0.1:8080")
     uvicorn.run(app, host="127.0.0.1", port=8080)
 
 

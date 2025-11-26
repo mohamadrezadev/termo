@@ -184,8 +184,8 @@ function calculateWindowPositions(
   const openWindows = windows.filter(w => w.isOpen);
   const { cols, rows } = calculateOptimalGrid(openWindows.length);
   
-  const padding = 10;
-  const headerHeight = 40;
+  const padding = 15; // افزایش فاصله بین پنجره‌ها
+  const headerHeight = 60; // ارتفاع هدر بیشتر برای جلوگیری از همپوشانی
   const availableWidth = containerWidth - (padding * (cols + 1));
   const availableHeight = containerHeight - headerHeight - (padding * (rows + 1));
   
@@ -219,7 +219,7 @@ const defaultWindows: WindowState[] = [
     id: 'thermal-viewer',
     title: 'Thermal Viewer',
     isOpen: true,
-    position: { x: 10, y: 50 },
+    position: { x: 20, y: 60 },
     size: { width: 600, height: 400 },
     zIndex: 1
   },
@@ -227,7 +227,7 @@ const defaultWindows: WindowState[] = [
     id: 'real-image-viewer',
     title: 'Real Image Viewer',
     isOpen: true,
-    position: { x: 620, y: 50 },
+    position: { x: 640, y: 60 },
     size: { width: 500, height: 400 },
     zIndex: 2
   },
@@ -235,7 +235,7 @@ const defaultWindows: WindowState[] = [
     id: 'parameters',
     title: 'Parameters',
     isOpen: true,
-    position: { x: 1130, y: 50 },
+    position: { x: 1160, y: 60 },
     size: { width: 300, height: 400 },
     zIndex: 3
   },
@@ -243,7 +243,7 @@ const defaultWindows: WindowState[] = [
     id: 'histogram',
     title: 'Histogram',
     isOpen: true,
-    position: { x: 10, y: 460 },
+    position: { x: 20, y: 480 },
     size: { width: 400, height: 300 },
     zIndex: 4
   },
@@ -251,7 +251,7 @@ const defaultWindows: WindowState[] = [
     id: 'data-table',
     title: 'Data Table',
     isOpen: true,
-    position: { x: 420, y: 460 },
+    position: { x: 440, y: 480 },
     size: { width: 700, height: 300 },
     zIndex: 5
   },
@@ -259,7 +259,7 @@ const defaultWindows: WindowState[] = [
     id: 'timeline',
     title: 'Timeline',
     isOpen: false,
-    position: { x: 10, y: 770 },
+    position: { x: 20, y: 800 },
     size: { width: 800, height: 150 },
     zIndex: 6
   },
@@ -267,7 +267,7 @@ const defaultWindows: WindowState[] = [
     id: 'reports',
     title: 'Reports',
     isOpen: false,
-    position: { x: 1130, y: 460 },
+    position: { x: 1160, y: 480 },
     size: { width: 300, height: 300 },
     zIndex: 7
   }

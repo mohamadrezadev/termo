@@ -1,2 +1,13 @@
 temp_uploads/
+extracted_images/
 __pycache__/
+venv/
+wheelhouse/
+*.db
+*.log
+.env
+data/
+projects/
+build/
+dist/
+*.egg-info/
