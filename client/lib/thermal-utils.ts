@@ -256,37 +256,71 @@ export async function processThermalDataFromCSV(
       throw new Error('CSV file is empty');
     }
 
-    // Parse CSV with validation
-    const rows = csvText.trim().split('\n').filter(row => row.trim().length > 0);
+    // Parse CSV with proper header handling
+    const allLines = csvText.trim().split('\n');
+    
+    // Filter out comment lines (starting with #) and header line (Y,X,Temperature)
+    const dataRows = allLines.filter(line => {
+      const trimmed = line.trim();
+      // Skip empty lines, comments, and header
+      return trimmed.length > 0 && 
+             !trimmed.startsWith('#') && 
+             !trimmed.match(/^Y\s*,\s*X\s*,\s*Temperature/i);
+    });
 
-    if (rows.length === 0) {
-      throw new Error('CSV has no valid rows');
+    if (dataRows.length === 0) {
+      throw new Error('CSV has no valid data rows');
     }
 
-    // Parse temperature matrix with error handling
-    const temperatureMatrix: number[][] = [];
-    const firstRowLength = rows[0].split(',').length;
+    console.log(`[THERMAL_UTILS] Found ${dataRows.length} data rows (filtered ${allLines.length - dataRows.length} header/comment lines)`);
 
-    for (let i = 0; i < rows.length; i++) {
-      const values = rows[i].split(',').map(val => {
-        const parsed = parseFloat(val.trim());
-        return isNaN(parsed) ? 0 : parsed; // Replace NaN with 0
-      });
+    // Group by Y coordinate to build matrix
+    const dataByY = new Map<number, Map<number, number>>();
+    let maxX = 0;
+    let maxY = 0;
 
-      // Validate row length consistency
-      if (values.length !== firstRowLength) {
-        console.warn(`[THERMAL_UTILS] Row ${i} has inconsistent length (${values.length} vs ${firstRowLength}), padding/truncating`);
-        // Pad with zeros if too short
-        while (values.length < firstRowLength) {
-          values.push(0);
-        }
-        // Truncate if too long
-        values.length = firstRowLength;
+    for (const row of dataRows) {
+      const parts = row.split(',').map(p => p.trim());
+      if (parts.length < 3) continue; // Skip invalid rows
+
+      const y = parseInt(parts[0]);
+      const x = parseInt(parts[1]);
+      const temp = parseFloat(parts[2]);
+
+      if (isNaN(y) || isNaN(x) || isNaN(temp)) {
+        console.warn(`[THERMAL_UTILS] Skipping invalid row: ${row}`);
+        continue;
       }
 
-      temperatureMatrix.push(values);
+      if (!dataByY.has(y)) {
+        dataByY.set(y, new Map());
+      }
+      dataByY.get(y)!.set(x, temp);
+
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
     }
 
+    // Build temperature matrix
+    const matrixHeight = maxY + 1;
+    const matrixWidth = maxX + 1;
+    const temperatureMatrix: number[][] = [];
+
+    console.log(`[THERMAL_UTILS] Building ${matrixWidth}x${matrixHeight} temperature matrix`);
+
+    for (let y = 0; y < matrixHeight; y++) {
+      const row: number[] = [];
+      const yData = dataByY.get(y);
+      
+      for (let x = 0; x < matrixWidth; x++) {
+        const temp = yData?.get(x);
+        row.push(temp !== undefined ? temp : 0);
+      }
+      
+      temperatureMatrix.push(row);
+    }
+
+    // Verify matrix dimensions
     const height = temperatureMatrix.length;
     const width = temperatureMatrix[0]?.length || 0;
 
@@ -303,7 +337,7 @@ export async function processThermalDataFromCSV(
       throw new Error(`CSV dimensions too large: ${width}x${height} (maximum 10000x10000)`);
     }
 
-    console.log(`[THERMAL_UTILS] CSV parsed: ${width}x${height} pixels`);
+    console.log(`[THERMAL_UTILS] CSV parsed successfully: ${width}x${height} pixels`);
 
     // محاسبه min/max temperature با validation
     let minTemp = Infinity;

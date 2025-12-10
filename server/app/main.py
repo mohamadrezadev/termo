@@ -9,14 +9,17 @@ from pathlib import Path as SysPath  # تغییر نام برای جلوگیری
 
 from app.core.config import settings
 from app.api.v1.router import api_router
-from app.db.session import get_db
+from app.db.session import get_db, init_db  # استفاده از init_db از session
 from app.models.project import Project
-from app.db.persistence import init_db
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    init_db()
+    print("\n" + "="*60)
+    print("🚀 Starting Thermal Analyzer API Server")
+    print("="*60)
+    init_db()  # خودکار دیتابیس رو می‌سازه
+    print("="*60 + "\n")
     yield
     # Shutdown
     pass

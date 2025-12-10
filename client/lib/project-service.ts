@@ -197,12 +197,37 @@ export async function serializeProject(
         }
       }
       
+      // تبدیل serverPalettes به base64 اگر path باشند
+      let processedServerPalettes: Record<string, string> | undefined;
+      if (img.serverPalettes) {
+        console.log(`[PROJECT_SERVICE_API] Processing server palettes for ${img.name}:`, Object.keys(img.serverPalettes));
+        processedServerPalettes = {};
+        for (const [paletteName, paletteUrl] of Object.entries(img.serverPalettes)) {
+          try {
+            // اگه قبلاً base64 هست، همونطور نگه داریم
+            if (paletteUrl.startsWith('data:')) {
+              processedServerPalettes[paletteName] = paletteUrl;
+              console.log(`[PROJECT_SERVICE_API] Palette '${paletteName}' is already base64`);
+            } else {
+              // تبدیل به base64
+              console.log(`[PROJECT_SERVICE_API] Converting palette '${paletteName}' to base64`);
+              processedServerPalettes[paletteName] = await urlToBase64(paletteUrl);
+              console.log(`[PROJECT_SERVICE_API] Palette '${paletteName}' converted: ${(processedServerPalettes[paletteName].length / 1024).toFixed(2)} KB`);
+            }
+          } catch (error) {
+            console.error(`[PROJECT_SERVICE_API] Failed to convert palette '${paletteName}':`, error);
+            // اگه تبدیل نشد، همون path رو نگه میداریم
+            processedServerPalettes[paletteName] = paletteUrl;
+          }
+        }
+      }
+      
       const serialized = {
         id: img.id,
         name: img.name,
         thermalImageBase64,
         realImageBase64,
-        serverPalettes: img.serverPalettes || undefined,
+        serverPalettes: processedServerPalettes,
         csvUrl: img.csvUrl || undefined,
         thermalData
       };
@@ -256,41 +281,112 @@ export function deserializeProject(serialized: SerializedProject): {
   const images: ThermalImage[] = serialized.images.map(img => {
     console.log(`[PROJECT_SERVICE_API] Deserializing image: ${img.name}`);
     
+    // Map backend field names to frontend field names
+    // Backend sends: thermal_image_path, real_image_path
+    // Frontend expects: realImage, serverRenderedThermalUrl
+    const backendImg = img as any;
+    
+    // Log raw backend data
+    console.log(`[PROJECT_SERVICE_API] Raw backend data for ${img.name}:`, {
+      thermalImageBase64Exists: !!img.thermalImageBase64,
+      realImageBase64Exists: !!img.realImageBase64,
+      thermal_image_path_exists: !!backendImg.thermal_image_path,
+      real_image_path_exists: !!backendImg.real_image_path,
+      thermal_image_path_preview: backendImg.thermal_image_path ? 
+        (backendImg.thermal_image_path.startsWith('data:') ? 
+          `base64 (${backendImg.thermal_image_path.substring(0, 30)}...)` : 
+          backendImg.thermal_image_path) : null,
+      real_image_path_preview: backendImg.real_image_path ? 
+        (backendImg.real_image_path.startsWith('data:') ? 
+          `base64 (${backendImg.real_image_path.substring(0, 30)}...)` : 
+          backendImg.real_image_path) : null,
+      server_palettes: backendImg.server_palettes ? Object.keys(backendImg.server_palettes) : null
+    });
+    
     let thermalData = null;
-    if (img.thermalData && img.thermalData.temperatureMatrixBase64) {
-      console.log(`[PROJECT_SERVICE_API] Restoring thermal data for ${img.name}`);
-      thermalData = {
-        ...img.thermalData,
-        temperatureMatrix: base64ToMatrix(
-          img.thermalData.temperatureMatrixBase64,
-          img.thermalData.width,
-          img.thermalData.height
-        )
-      };
-      delete (thermalData as any).temperatureMatrixBase64;
+    // Backend might send thermal_data (snake_case) or thermalData (camelCase)
+    const rawThermalData = backendImg.thermal_data || img.thermalData;
+    
+    if (rawThermalData) {
+      console.log(`[PROJECT_SERVICE_API] Raw thermal data found for ${img.name}:`, {
+        hasTemperatureMatrixBase64: !!(rawThermalData.temperatureMatrixBase64),
+        width: rawThermalData.width,
+        height: rawThermalData.height,
+        minTemp: rawThermalData.minTemp || rawThermalData.min_temp,
+        maxTemp: rawThermalData.maxTemp || rawThermalData.max_temp
+      });
+      
+      if (rawThermalData.temperatureMatrixBase64) {
+        console.log(`[PROJECT_SERVICE_API] Restoring thermal data for ${img.name}`);
+        thermalData = {
+          width: rawThermalData.width,
+          height: rawThermalData.height,
+          minTemp: rawThermalData.minTemp || rawThermalData.min_temp,
+          maxTemp: rawThermalData.maxTemp || rawThermalData.max_temp,
+          metadata: rawThermalData.metadata,
+          temperatureMatrix: base64ToMatrix(
+            rawThermalData.temperatureMatrixBase64,
+            rawThermalData.width,
+            rawThermalData.height
+          )
+        };
+      }
+    }
+    
+    // Convert server palettes to absolute base64 if they're paths
+    let processedServerPalettes = img.serverPalettes || backendImg.server_palettes || undefined;
+    if (processedServerPalettes) {
+      console.log(`[PROJECT_SERVICE_API] Processing server palettes for ${img.name}:`, Object.keys(processedServerPalettes));
+      // Server palettes should already be base64 from backend
+      // If not, they might be paths that need conversion
     }
     
     const thermalImage: ThermalImage = {
       id: img.id,
       name: img.name,
       thermalData: thermalData,
-      realImage: img.realImageBase64 || null,
-      serverRenderedThermalUrl: img.thermalImageBase64 || null,
-      serverPalettes: img.serverPalettes || undefined,
-      csvUrl: img.csvUrl || undefined
+      // Backend sends real_image_path which is already base64 after conversion
+      realImage: backendImg.real_image_path || img.realImageBase64 || null,
+      // Backend sends thermal_image_path which is already base64 after conversion
+      serverRenderedThermalUrl: backendImg.thermal_image_path || img.thermalImageBase64 || null,
+      serverPalettes: processedServerPalettes,
+      csvUrl: img.csvUrl || backendImg.csv_url || undefined
     };
+    
+    // If we have thermal data but no canvas, create one for the image
+    if (thermalImage.thermalData && !thermalImage.canvas) {
+      console.log(`[PROJECT_SERVICE_API] Creating canvas for ${img.name}`);
+      const canvas = document.createElement('canvas');
+      canvas.width = thermalImage.thermalData.width;
+      canvas.height = thermalImage.thermalData.height;
+      thermalImage.canvas = canvas;
+    }
     
     console.log(`[PROJECT_SERVICE_API] Image ${img.name} deserialized:`, {
       hasRealImage: !!thermalImage.realImage,
+      realImageIsBase64: thermalImage.realImage?.startsWith('data:'),
+      realImageLength: thermalImage.realImage?.length || 0,
       hasThermalImage: !!thermalImage.serverRenderedThermalUrl,
+      thermalImageIsBase64: thermalImage.serverRenderedThermalUrl?.startsWith('data:'),
+      thermalImageLength: thermalImage.serverRenderedThermalUrl?.length || 0,
       hasThermalData: !!thermalImage.thermalData,
+      hasCanvas: !!thermalImage.canvas,
       hasServerPalettes: !!thermalImage.serverPalettes,
       serverPalettesKeys: thermalImage.serverPalettes ? Object.keys(thermalImage.serverPalettes) : [],
-      hasCsvUrl: !!thermalImage.csvUrl,
-      serverRenderedUrlPreview: thermalImage.serverRenderedThermalUrl?.substring(0, 50)
+      hasCsvUrl: !!thermalImage.csvUrl
     });
     
     return thermalImage;
+  }).filter(img => {
+    // Filter out images that have no data at all
+    const hasData = img.realImage || img.serverRenderedThermalUrl || img.thermalData || 
+                   (img.serverPalettes && Object.keys(img.serverPalettes).length > 0);
+    
+    if (!hasData) {
+      console.log(`[PROJECT_SERVICE_API] Filtering out empty image: ${img.name}`);
+    }
+    
+    return hasData;
   });
 
   const project: Project = {
@@ -365,7 +461,9 @@ export async function saveProjectToAPI(
         name: img.name,
         thermal_image_base64: img.thermalImageBase64,
         real_image_base64: img.realImageBase64,
-        thermal_data_json: img.thermalData ? JSON.stringify(img.thermalData) : undefined
+        thermal_data_json: img.thermalData ? JSON.stringify(img.thermalData) : undefined,
+        server_palettes: img.serverPalettes,
+        csv_url: img.csvUrl
       })),
       serialized.markers.map(m => ({
         id: m.id,

@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.routes import (
-    projects,
+    project,  # Changed from 'projects' to 'project' for SQLModel
     thermal,
     markers,
     regions,
@@ -12,7 +12,7 @@ from app.api.routes import (
 api_router = APIRouter()
 
 api_router.include_router(
-    projects.router,
+    project.router,  # Changed from projects.router to project.router
     prefix="/projects",
     tags=["projects"]
 )

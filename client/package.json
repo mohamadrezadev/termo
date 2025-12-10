@@ -64,6 +64,7 @@
     "eslint": "8.49.0",
     "eslint-config-next": "13.5.1",
     "file-saver": "^2.0.5",
+    "html-docx-js": "^0.3.1",
     "html2canvas": "^1.4.1",
     "html2pdf.js": "^0.10.3",
     "input-otp": "^1.2.4",

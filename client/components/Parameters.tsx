@@ -69,16 +69,16 @@ export default function Parameters() {
                 key={key}
                 onClick={() => handlePaletteChange(key)}
                 className={`
-                  relative p-2 rounded-lg border-2 transition-all
+                  relative p-2 rounded-lg border-2 transition-all duration-200 group
                   ${currentPalette === key 
-                    ? 'border-blue-500 bg-blue-500/10' 
-                    : 'border-gray-600 hover:border-gray-500'
+                    ? 'border-primary shadow-glow bg-primary/10' 
+                    : 'border-border hover:border-primary/50 hover:shadow-sm'
                   }
                 `}
               >
                 {/* Palette Preview */}
                 <div 
-                  className="h-8 rounded mb-1"
+                  className="h-8 rounded-md mb-1 ring-1 ring-border group-hover:ring-primary/50 transition-all"
                   style={{
                     background: `linear-gradient(to right, ${palette.colors.join(', ')})`
                   }}
@@ -88,7 +88,7 @@ export default function Parameters() {
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium">{palette.name}</span>
                   {currentPalette === key && (
-                    <Check className="w-3 h-3 text-blue-500" />
+                    <Check className="w-3 h-3 text-primary" />
                   )}
                 </div>
               </button>
@@ -96,15 +96,15 @@ export default function Parameters() {
           </div>
 
           {/* Current Palette Info */}
-          <div className="bg-gray-800 rounded p-2 border border-gray-700">
-            <div className="text-xs text-gray-400 mb-1">پالت فعلی:</div>
+          <div className="bg-muted/50 rounded-lg p-3 border border-primary/20 backdrop-blur-sm">
+            <div className="text-xs text-muted-foreground mb-2 font-medium">پالت فعلی:</div>
             <div 
-              className="h-6 rounded border border-gray-600"
+              className="h-6 rounded-md border-2 border-primary/30 shadow-sm"
               style={{
                 background: `linear-gradient(to right, ${COLOR_PALETTES[currentPalette]?.colors.join(', ')})`
               }}
             />
-            <div className="text-xs text-center mt-1 font-medium">
+            <div className="text-xs text-center mt-2 font-semibold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
               {COLOR_PALETTES[currentPalette]?.name}
             </div>
           </div>

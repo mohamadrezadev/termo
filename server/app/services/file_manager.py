@@ -172,22 +172,57 @@ class FileManager:
         Convert URL path back to filesystem path.
         
         Args:
-            url_path: URL like "/files/projects/project_id/thermal/file.png"
+            url_path: URL like "/files/projects/project_id/thermal/file.png" or with query params
             
         Returns:
             Full filesystem path or None if invalid
         """
         try:
+            print(f"[FILE_MANAGER] get_file_path called with: {url_path}")
+            
+            # Remove query parameters (e.g., ?t=timestamp)
+            if '?' in url_path:
+                url_path = url_path.split('?')[0]
+                print(f"[FILE_MANAGER] Removed query params, now: {url_path}")
+            
             # Remove /files/projects/ prefix
             if url_path.startswith("/files/projects/"):
                 relative_path = url_path.replace("/files/projects/", "")
-                full_path = self.projects_dir / relative_path
                 
+                # Try projects_dir first
+                full_path = self.projects_dir / relative_path
+                print(f"[FILE_MANAGER] Trying projects_dir: {full_path}")
                 if full_path.exists():
+                    print(f"[FILE_MANAGER] Found in projects_dir!")
+                    return full_path
+                
+                # Try base_dir
+                full_path = self.base_dir / relative_path
+                print(f"[FILE_MANAGER] Trying base_dir: {full_path}")
+                if full_path.exists():
+                    print(f"[FILE_MANAGER] Found in base_dir!")
                     return full_path
             
+            # Try as relative path from base_dir
+            elif not url_path.startswith('/'):
+                full_path = self.base_dir / url_path
+                print(f"[FILE_MANAGER] Trying as relative from base_dir: {full_path}")
+                if full_path.exists():
+                    print(f"[FILE_MANAGER] Found!")
+                    return full_path
+                
+                full_path = self.projects_dir / url_path
+                print(f"[FILE_MANAGER] Trying as relative from projects_dir: {full_path}")
+                if full_path.exists():
+                    print(f"[FILE_MANAGER] Found!")
+                    return full_path
+            
+            print(f"[FILE_MANAGER] File not found in any location")
             return None
-        except Exception:
+        except Exception as e:
+            print(f"[FILE_MANAGER] Error in get_file_path: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
     def delete_project_directory(self, project_id: str) -> bool:

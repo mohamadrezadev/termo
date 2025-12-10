@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useAppStore } from '@/lib/store';
 import { translations } from '@/lib/translations';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -118,7 +119,7 @@ export default function TopMenuBar() {
         mode={projectDialogMode}
       />
 
-      <div className="h-10 bg-gray-800 border-b border-gray-700 flex items-center px-2 text-sm">
+      <div className="h-10 bg-gradient-to-r from-card/95 to-card border-b-2 border-primary/20 flex items-center px-2 text-sm transition-all duration-300 backdrop-blur-md shadow-sm">
         <div className="flex items-center space-x-1">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -280,6 +281,10 @@ export default function TopMenuBar() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          <div className="ml-2">
+            <ThemeToggle />
+          </div>
         </div>
       </div>
     </>

@@ -3,7 +3,7 @@ productName: Thermal Analyzer Pro
 copyright: Copyright © 2025 Thermal Analyzer
 
 directories:
-  output: dist_electron
+  output: dist_final
   buildResources: assets
 
 files:

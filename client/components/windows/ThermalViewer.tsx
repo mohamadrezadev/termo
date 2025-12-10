@@ -3,6 +3,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { useAppStore } from '@/lib/store';
 import { translations } from '@/lib/translations';
+import { useToast } from '@/hooks/use-toast';
 import {
   getTemperatureAtPixel,
   COLOR_PALETTES,
@@ -29,12 +30,15 @@ import {
   ZoomIn,
   ZoomOut,
   RotateCcw,
-  Upload
+  Upload,
+  Eraser,
+  Check
 } from 'lucide-react';
 import { cn, generateId } from '@/lib/utils';
 import { post, getAbsoluteUrl, rerenderPalette } from '@/lib/api-service';
 
 export default function ThermalViewer() {
+  const { toast } = useToast();
   const {
     language,
     images,
@@ -46,6 +50,8 @@ export default function ThermalViewer() {
     activeTool,
     markers,
     regions,
+    showMarkers,
+    showRegions,
     setThermalZoom,
     setThermalPan,
     setActiveTool,
@@ -53,6 +59,8 @@ export default function ThermalViewer() {
     addImage,
     addMarker,
     addRegion,
+    removeMarker,
+    removeRegion,
     setActiveImage,
     updateImagePalettes,
     updateGlobalParameters
@@ -111,9 +119,10 @@ export default function ThermalViewer() {
       console.log('[THERMAL_VIEWER] Using server palette:', currentPalette, 'URL:', serverPaletteUrl);
       setImageLoading(true);
 
-      // Add cache-busting parameter to force reload on every palette change
-      const baseUrl = serverPaletteUrl.split('?')[0];
-      const urlWithCacheBuster = `${baseUrl}?t=${Date.now()}`;
+      // Add cache-busting parameter only for URL paths, not for base64 images
+      const urlWithCacheBuster = serverPaletteUrl.startsWith('data:')
+        ? serverPaletteUrl
+        : `${serverPaletteUrl.split('?')[0]}?t=${Date.now()}`;
 
       const img = new Image();
       img.crossOrigin = "anonymous";
@@ -140,42 +149,6 @@ export default function ThermalViewer() {
 
       console.log('[THERMAL_VIEWER] Loading image from:', urlWithCacheBuster);
       img.src = urlWithCacheBuster;
-    } else if (!serverPaletteUrl && activeImage?.serverRenderedThermalUrl && !needsCustomRendering) {
-      // Fallback: استفاده از تصویر اصلی اگر serverPalettes موجود نیست
-      console.log('[THERMAL_VIEWER] No server palettes, using serverRenderedThermalUrl');
-      setImageLoading(true);
-
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-
-      img.onload = () => {
-        console.log('[THERMAL_VIEWER] Thermal image loaded successfully');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, img.width, img.height);
-        }
-        setImageLoading(false);
-      };
-
-      img.onerror = (e) => {
-        console.error('[THERMAL_VIEWER] Error loading thermal image:', e);
-        setImageLoading(false);
-        // Try client-side rendering as last resort
-        if (activeImage?.thermalData && palette) {
-          console.log('[THERMAL_VIEWER] Falling back to client-side rendering');
-          renderThermalCanvas(
-            canvas,
-            activeImage.thermalData,
-            palette,
-            customMinTemp ?? activeImage.thermalData.minTemp,
-            customMaxTemp ?? activeImage.thermalData.maxTemp
-          );
-        }
-      };
-
-      img.src = activeImage.serverRenderedThermalUrl;
     } else if (activeImage?.thermalData && palette) {
       // Client-side rendering with custom palette/temperature range (SLOWER)
       console.log('[THERMAL_VIEWER] Client-side rendering with palette:', currentPalette);
@@ -192,8 +165,37 @@ export default function ThermalViewer() {
         );
         setImageLoading(false);
       }, 0);
+    } else if (activeImage?.serverRenderedThermalUrl) {
+      // Last fallback: if no palette available and no thermalData, use the default server rendered image
+      console.log('[THERMAL_VIEWER] No matching palette or thermal data, using default serverRenderedThermalUrl');
+      setImageLoading(true);
+
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+
+      img.onload = () => {
+        console.log('[THERMAL_VIEWER] Default thermal image loaded');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, img.width, img.height);
+        }
+        setImageLoading(false);
+      };
+
+      img.onerror = (e) => {
+        console.error('[THERMAL_VIEWER] Error loading default thermal image:', e);
+        setImageLoading(false);
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+      };
+
+      img.src = activeImage.serverRenderedThermalUrl;
     } else {
-      // Clear canvas if no data
+      // Clear canvas if no data at all
       console.log('[THERMAL_VIEWER] No thermal data to render, clearing canvas.');
       const ctx = canvas.getContext('2d');
       if (ctx) {
@@ -208,6 +210,14 @@ export default function ThermalViewer() {
     if (activeImage) {
       console.log(`[THERMAL_VIEWER_STATE] Active image changed: ID=${activeImage.id}, Name=${activeImage.name}`);
       console.log(`[THERMAL_VIEWER_STATE] RealImage URL: ${activeImage.realImage}`);
+      console.log(`[THERMAL_VIEWER_STATE] ServerRenderedThermalUrl: ${activeImage.serverRenderedThermalUrl}`);
+      if (activeImage.serverPalettes) {
+        console.log(`[THERMAL_VIEWER_STATE] Server Palettes:`, Object.keys(activeImage.serverPalettes));
+        const currentPaletteUrl = activeImage.serverPalettes[currentPalette];
+        if (currentPaletteUrl) {
+          console.log(`[THERMAL_VIEWER_STATE] Current palette '${currentPalette}' URL is base64: ${currentPaletteUrl.startsWith('data:')}, Length: ${currentPaletteUrl.length}`);
+        }
+      }
       if (activeImage.thermalData) {
         console.log(`[THERMAL_VIEWER_STATE] ThermalData: Width=${activeImage.thermalData.width}, Height=${activeImage.thermalData.height}, MinT=${activeImage.thermalData.minTemp}, MaxT=${activeImage.thermalData.maxTemp}`);
       } else {
@@ -216,7 +226,203 @@ export default function ThermalViewer() {
     } else {
       console.log('[THERMAL_VIEWER_STATE] No active image.');
     }
-  }, [activeImage]);
+  }, [activeImage, currentPalette]);
+
+  // Effect to update overlay canvas size when main canvas size changes
+  useEffect(() => {
+    const mainCanvas = mainCanvasRef.current;
+    const overlayCanvas = overlayCanvasRef.current;
+    
+    if (mainCanvas && overlayCanvas && (mainCanvas.width > 0 || mainCanvas.height > 0)) {
+      // Update overlay canvas size to match main canvas
+      if (overlayCanvas.width !== mainCanvas.width || overlayCanvas.height !== mainCanvas.height) {
+        console.log('[THERMAL_VIEWER] Updating overlay canvas size:', {
+          width: mainCanvas.width,
+          height: mainCanvas.height
+        });
+        overlayCanvas.width = mainCanvas.width;
+        overlayCanvas.height = mainCanvas.height;
+      }
+    }
+  }, [activeImage, mainCanvasRef.current?.width, mainCanvasRef.current?.height]);
+
+  // Effect for rendering markers and regions on overlay canvas
+  useEffect(() => {
+    const overlayCanvas = overlayCanvasRef.current;
+    if (!overlayCanvas || !activeImage) {
+      console.log('[THERMAL_VIEWER] Overlay render skipped:', {
+        hasOverlayCanvas: !!overlayCanvas,
+        hasActiveImage: !!activeImage
+      });
+      return;
+    }
+
+    const ctx = overlayCanvas.getContext('2d');
+    if (!ctx) {
+      console.log('[THERMAL_VIEWER] Failed to get overlay context');
+      return;
+    }
+
+    // Clear overlay canvas
+    ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+    // Get markers and regions for current image
+    const imageMarkers = markers.filter(m => m.imageId === activeImage.id);
+    const imageRegions = regions.filter(r => r.imageId === activeImage.id);
+
+    console.log(`[THERMAL_VIEWER] Rendering overlay for ${activeImage.name}:`, {
+      markersCount: imageMarkers.length,
+      regionsCount: imageRegions.length,
+      showMarkers,
+      showRegions,
+      canvasSize: { width: overlayCanvas.width, height: overlayCanvas.height }
+    });
+
+    // Draw regions first (behind markers)
+    if (showRegions) {
+      imageRegions.forEach(region => {
+        ctx.strokeStyle = region.color || '#00ff00';
+        ctx.lineWidth = 2;
+        ctx.fillStyle = (region.color || '#00ff00') + '33'; // Semi-transparent fill
+
+        if (region.type === 'rectangle' && region.points.length === 2) {
+          const [p1, p2] = region.points;
+          const x = Math.min(p1.x, p2.x);
+          const y = Math.min(p1.y, p2.y);
+          const width = Math.abs(p2.x - p1.x);
+          const height = Math.abs(p2.y - p1.y);
+          
+          ctx.fillRect(x, y, width, height);
+          ctx.strokeRect(x, y, width, height);
+        } else if (region.type === 'polygon' && region.points.length >= 3) {
+          ctx.beginPath();
+          ctx.moveTo(region.points[0].x, region.points[0].y);
+          for (let i = 1; i < region.points.length; i++) {
+            ctx.lineTo(region.points[i].x, region.points[i].y);
+          }
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        } else if (region.type === 'circle' && region.points.length === 2) {
+          const [center, edge] = region.points;
+          const radius = Math.sqrt(
+            Math.pow(edge.x - center.x, 2) + Math.pow(edge.y - center.y, 2)
+          );
+          ctx.beginPath();
+          ctx.arc(center.x, center.y, radius, 0, 2 * Math.PI);
+          ctx.fill();
+          ctx.stroke();
+        } else if (region.type === 'line' && region.points.length === 2) {
+          const [p1, p2] = region.points;
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          ctx.stroke();
+        }
+
+        // Draw region label
+        if (region.label) {
+          const centerX = region.points.reduce((sum, p) => sum + p.x, 0) / region.points.length;
+          const centerY = region.points.reduce((sum, p) => sum + p.y, 0) / region.points.length;
+          
+          ctx.fillStyle = '#ffffff';
+          ctx.font = '12px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(region.label, centerX, centerY - 10);
+          
+          // Draw temperature info
+          if (region.avgTemp) {
+            ctx.fillText(`${region.avgTemp.toFixed(1)}°C`, centerX, centerY + 5);
+          }
+        }
+      });
+    }
+
+    // Draw markers (on top of regions)
+    if (showMarkers) {
+      imageMarkers.forEach(marker => {
+        // Draw marker point
+        ctx.fillStyle = '#ff0000';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        
+        ctx.beginPath();
+        ctx.arc(marker.x, marker.y, 5, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.stroke();
+
+        // Draw marker label and temperature
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'left';
+        
+        const labelX = marker.x + 10;
+        const labelY = marker.y - 10;
+        
+        // Draw background for label
+        const labelText = `${marker.label || 'Point'}`;
+        const tempText = marker.temperature ? `${marker.temperature.toFixed(1)}°C` : '';
+        const labelWidth = Math.max(
+          ctx.measureText(labelText).width,
+          ctx.measureText(tempText).width
+        ) + 8;
+        
+        ctx.fillStyle = '#000000aa';
+        ctx.fillRect(labelX - 4, labelY - 14, labelWidth, tempText ? 30 : 16);
+        
+        // Draw text
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(labelText, labelX, labelY);
+        if (tempText) {
+          ctx.fillStyle = '#ffff00';
+          ctx.fillText(tempText, labelX, labelY + 14);
+        }
+      });
+    }
+
+    // Draw current drawing region (preview)
+    if (isDrawing && currentRegion && currentRegion.points.length > 0) {
+      ctx.strokeStyle = '#ffff00'; // Yellow for preview
+      ctx.lineWidth = 2;
+      ctx.fillStyle = 'rgba(255, 255, 0, 0.1)'; // Semi-transparent yellow
+
+      if (activeTool === 'rectangle' && currentRegion.points.length === 2) {
+        const [p1, p2] = currentRegion.points;
+        const x = Math.min(p1.x, p2.x);
+        const y = Math.min(p1.y, p2.y);
+        const width = Math.abs(p2.x - p1.x);
+        const height = Math.abs(p2.y - p1.y);
+        
+        ctx.fillRect(x, y, width, height);
+        ctx.strokeRect(x, y, width, height);
+      } else if (activeTool === 'circle' && currentRegion.points.length === 2) {
+        const [center, edge] = currentRegion.points;
+        const radius = Math.sqrt(
+          Math.pow(edge.x - center.x, 2) + Math.pow(edge.y - center.y, 2)
+        );
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, radius, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.stroke();
+      } else if (activeTool === 'polygon' && currentRegion.points.length >= 2) {
+        ctx.beginPath();
+        ctx.moveTo(currentRegion.points[0].x, currentRegion.points[0].y);
+        for (let i = 1; i < currentRegion.points.length; i++) {
+          ctx.lineTo(currentRegion.points[i].x, currentRegion.points[i].y);
+        }
+        // Don't close path for polygon preview (still drawing)
+        ctx.stroke();
+        
+        // Draw points as small circles
+        currentRegion.points.forEach((point, index) => {
+          ctx.fillStyle = index === 0 ? '#ff0000' : '#ffff00';
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, 4, 0, 2 * Math.PI);
+          ctx.fill();
+        });
+      }
+    }
+  }, [activeImage, markers, regions, showMarkers, showRegions, isDrawing, currentRegion, activeTool]);
 
   // renderThermal and its useEffect will be removed, handled by ThermalImageRenderer
 
@@ -274,45 +480,69 @@ export default function ThermalViewer() {
       return;
     }
 
-    // Check if we need to request from server or use client-side rendering
+    // Check if we have thermal data for client-side rendering
     if (activeImage.thermalData) {
-      // We have thermal data, can render client-side
+      console.log(`[PALETTE] Has thermal data, checking if should request from server or render client-side`);
+      
+      // اگر پروژه ذخیره شده است، ممکن است پالت در سرور موجود باشد
+      // بهتر است اول از سرور درخواست کنیم (سریعتر از client-side rendering)
+      const currentProject = useAppStore.getState().currentProject;
+      if (currentProject?.id) {
+        try {
+          console.log(`[PALETTE] Requesting palette '${newPalette}' from server (faster than client-side)`);
+          const projectName = getProjectName();
+          const resp = await rerenderPalette(null, projectName, newPalette);
+          console.log('[PALETTE] Rerender response:', resp);
+
+          if (resp?.status === 'success' && resp.thermal_url) {
+            // سرور پالت را تولید کرده یا از کش برگردانده
+            const absoluteUrl = getAbsoluteUrl(resp.thermal_url);
+            if (absoluteUrl) {
+              // به‌روزرسانی serverPalettes برای این تصویر
+              const updatedPalettes = {
+                ...activeImage.serverPalettes,
+                [newPalette]: absoluteUrl
+              };
+              updateImagePalettes(activeImage.id, updatedPalettes);
+              
+              console.log(`[PALETTE] Server provided palette '${newPalette}' (from_cache: ${resp.from_cache})`);
+              setPalette(newPalette);
+              return;
+            }
+          }
+        } catch (err) {
+          console.warn('[PALETTE] Server request failed, falling back to client-side rendering:', err);
+        }
+      }
+      
+      // Fallback: استفاده از client-side rendering
       console.log(`[PALETTE] Using client-side rendering for palette '${newPalette}'`);
       setPalette(newPalette);
       return;
     }
 
-    // We need to request the palette from server (server can use stored .bmt for the project)
+    // آخرین حالت: نه serverPalettes داریم، نه thermalData
+    // باید حتماً از سرور درخواست کنیم
     try {
-      console.log(`[PALETTE] Requesting palette '${newPalette}' from server for project`);
+      console.log(`[PALETTE] No thermal data, must request palette '${newPalette}' from server`);
       const projectName = getProjectName();
       const resp = await rerenderPalette(null, projectName, newPalette);
       console.log('[PALETTE] Rerender response:', resp);
 
-      if (resp?.status === 'success') {
-        const thermalResult = resp.images?.find((img: any) => img.type === 'thermal');
-        const realResult = resp.images?.find((img: any) => img.type === 'real');
-
-        // Convert relative palette URLs to absolute and attach cache-buster when used
-        const absolutePalettes: Record<string, string> = {};
-        if (thermalResult?.palettes) {
-          Object.entries(thermalResult.palettes).forEach(([pName, rel]: any) => {
-            const abs = getAbsoluteUrl(rel as string);
-            if (abs) absolutePalettes[pName] = abs;
-          });
-        }
-
-        // Merge/update store with new palette URLs for the active image
-        updateImagePalettes(activeImage.id, absolutePalettes);
-
-        // If server provided a rendered thermal image, set it as the chosen palette
-        if (absolutePalettes[newPalette]) {
+      if (resp?.status === 'success' && resp.thermal_url) {
+        const absoluteUrl = getAbsoluteUrl(resp.thermal_url);
+        if (absoluteUrl) {
+          const updatedPalettes = {
+            ...activeImage.serverPalettes,
+            [newPalette]: absoluteUrl
+          };
+          updateImagePalettes(activeImage.id, updatedPalettes);
           setPalette(newPalette);
           return;
         }
       }
 
-      console.warn(`[PALETTE] Server could not provide palette '${newPalette}', falling back to client render`);
+      console.warn(`[PALETTE] Server could not provide palette '${newPalette}'`);
       setPalette(newPalette);
     } catch (err) {
       console.error('[PALETTE] Error requesting palette from server:', err);
@@ -320,9 +550,173 @@ export default function ThermalViewer() {
     }
   }, [activeImage, setPalette, getProjectName, updateImagePalettes]);
 
+  // Helper function to check if a point is inside a polygon (ray casting algorithm)
+  const isPointInPolygon = useCallback((point: { x: number; y: number }, polygon: { x: number; y: number }[]) => {
+    let inside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const xi = polygon[i].x, yi = polygon[i].y;
+      const xj = polygon[j].x, yj = polygon[j].y;
+      
+      const intersect = ((yi > point.y) !== (yj > point.y))
+        && (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }, []);
+
+  const calculateRegionTemperatures = useCallback((thermalData: any, points: { x: number; y: number }[], type: string) => {
+    const temps: number[] = [];
+
+    if (type === 'rectangle' && points.length === 2) {
+      const [p1, p2] = points;
+      const minX = Math.floor(Math.min(p1.x, p2.x));
+      const maxX = Math.ceil(Math.max(p1.x, p2.x));
+      const minY = Math.floor(Math.min(p1.y, p2.y));
+      const maxY = Math.ceil(Math.max(p1.y, p2.y));
+
+      for (let y = minY; y <= maxY; y++) {
+        for (let x = minX; x <= maxX; x++) {
+          const temp = getTemperatureAtPixel(thermalData, x, y);
+          if (temp !== null) temps.push(temp);
+        }
+      }
+    } else if (type === 'circle' && points.length === 2) {
+      const [center, edge] = points;
+      const radius = Math.sqrt(Math.pow(edge.x - center.x, 2) + Math.pow(edge.y - center.y, 2));
+      const minX = Math.floor(center.x - radius);
+      const maxX = Math.ceil(center.x + radius);
+      const minY = Math.floor(center.y - radius);
+      const maxY = Math.ceil(center.y + radius);
+
+      for (let y = minY; y <= maxY; y++) {
+        for (let x = minX; x <= maxX; x++) {
+          // Check if point is inside circle
+          const distance = Math.sqrt(Math.pow(x - center.x, 2) + Math.pow(y - center.y, 2));
+          if (distance <= radius) {
+            const temp = getTemperatureAtPixel(thermalData, x, y);
+            if (temp !== null) temps.push(temp);
+          }
+        }
+      }
+    } else if (type === 'polygon' && points.length >= 3) {
+      // For polygon, find bounding box first
+      const minX = Math.floor(Math.min(...points.map(p => p.x)));
+      const maxX = Math.ceil(Math.max(...points.map(p => p.x)));
+      const minY = Math.floor(Math.min(...points.map(p => p.y)));
+      const maxY = Math.ceil(Math.max(...points.map(p => p.y)));
+
+      // Check each point in bounding box if it's inside polygon
+      for (let y = minY; y <= maxY; y++) {
+        for (let x = minX; x <= maxX; x++) {
+          if (isPointInPolygon({ x, y }, points)) {
+            const temp = getTemperatureAtPixel(thermalData, x, y);
+            if (temp !== null) temps.push(temp);
+          }
+        }
+      }
+    }
+
+    if (temps.length === 0) return { min: 0, max: 0, avg: 0 };
+
+    return {
+      min: Math.min(...temps),
+      max: Math.max(...temps),
+      avg: temps.reduce((sum, temp) => sum + temp, 0) / temps.length
+    };
+  }, [isPointInPolygon]);
+
+  const calculateRectangleArea = useCallback((points: { x: number; y: number }[]) => {
+    if (points.length !== 2) return 0;
+    const [p1, p2] = points;
+    return Math.abs((p2.x - p1.x) * (p2.y - p1.y));
+  }, []);
+
+  const calculatePolygonArea = useCallback((points: { x: number; y: number }[]) => {
+    if (points.length < 3) return 0;
+    let area = 0;
+    for (let i = 0; i < points.length; i++) {
+      const j = (i + 1) % points.length;
+      area += points[i].x * points[j].y;
+      area -= points[j].x * points[i].y;
+    }
+    return Math.abs(area) / 2;
+  }, []);
+
+  // Keyboard event handler for polygon completion
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Enter or Space to complete polygon
+      if ((e.key === 'Enter' || e.key === ' ') && activeTool === 'polygon' && isDrawing && currentRegion && currentRegion.points.length >= 3 && activeImage) {
+        e.preventDefault();
+        
+        console.log('[THERMAL_VIEWER] Completing polygon with Enter/Space key');
+        
+        // Remove the last point (temporary mouse position)
+        let finalPoints = currentRegion.points.slice(0, -1);
+        
+        if (finalPoints.length < 3) {
+          console.log('[THERMAL_VIEWER] Not enough points for polygon');
+          setIsDrawing(false);
+          setCurrentRegion(null);
+          return;
+        }
+
+        const region = {
+          id: generateId(),
+          type: 'polygon' as const,
+          points: finalPoints,
+          minTemp: 0,
+          maxTemp: 0,
+          avgTemp: 0,
+          area: 0,
+          label: `Polygon ${regions.length + 1}`,
+          emissivity: 0.95,
+          imageId: activeImage.id
+        };
+
+        // Calculate temperature statistics
+        if (activeImage.thermalData) {
+          const temps = calculateRegionTemperatures(activeImage.thermalData, finalPoints, 'polygon');
+          region.minTemp = temps.min;
+          region.maxTemp = temps.max;
+          region.avgTemp = temps.avg;
+          region.area = calculatePolygonArea(finalPoints);
+        }
+
+        addRegion(region);
+        console.log('[THERMAL_VIEWER] Polygon region completed with keyboard:', region);
+        setIsDrawing(false);
+        setCurrentRegion(null);
+      }
+      
+      // Escape to cancel drawing
+      if (e.key === 'Escape' && isDrawing) {
+        console.log('[THERMAL_VIEWER] Drawing cancelled with Escape');
+        setIsDrawing(false);
+        setCurrentRegion(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [activeTool, isDrawing, currentRegion, activeImage, regions.length, addRegion, calculateRegionTemperatures, calculatePolygonArea]);
+
   const handleFileUpload = useCallback(async (files: FileList) => {
     const projectName = getProjectName();
-    console.log(`[UPLOAD] Starting file upload for project: ${projectName}`);
+    const projectId = useAppStore.getState().currentProject?.id;
+    
+    if (!projectId) {
+      toast({
+        title: "خطا",
+        description: "لطفاً ابتدا یک پروژه ایجاد کنید",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    console.log(`[UPLOAD] Starting file upload for project: ${projectName} (ID: ${projectId})`);
 
     setIsLoading(true); // Start loading
 
@@ -333,8 +727,8 @@ export default function ThermalViewer() {
         
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('project_name', projectName);
-        console.log(`[UPLOAD] Uploading file: ${file.name}`);
+        formData.append('project_id', projectId); // استفاده از project_id به جای project_name
+        console.log(`[UPLOAD] Uploading file: ${file.name} to project ${projectId}`);
 
         // Use the centralized post function from api-service
         const result = await post('/thermal/upload', formData, {
@@ -485,13 +879,26 @@ export default function ThermalViewer() {
       }
     } catch (err: any) {
       console.error('[UPLOAD] File upload or processing failed for file:', file.name, err);
-      // TODO: Show error toast to user
-      alert(`Upload failed for ${file.name}: ${err.message}`);
+      
+      // نمایش پیام خطای فارسی
+      let errorMessage = 'آپلود فایل با خطا مواجه شد';
+      
+      if (err.response?.data?.detail) {
+        errorMessage = err.response.data.detail;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      toast({
+        title: "خطا در آپلود فایل",
+        description: errorMessage,
+        variant: "destructive"
+      });
     }
   }
 
     setIsLoading(false); // End loading after all files processed
-  }, [addImage, setActiveImage, getProjectName]);
+  }, [addImage, setActiveImage, getProjectName, toast]);
  
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -597,6 +1004,10 @@ export default function ThermalViewer() {
       setIsDrawing(true);
       // Initial point for rectangle, second point will be updated by mouse move
       setCurrentRegion({ points: [{ x: imgX, y: imgY }, { x: imgX, y: imgY }] });
+    } else if (activeTool === 'circle' && !isDrawing) {
+      setIsDrawing(true);
+      // Circle: first point is center, second point defines radius
+      setCurrentRegion({ points: [{ x: imgX, y: imgY }, { x: imgX, y: imgY }] });
     } else if (activeTool === 'polygon') {
       if (!isDrawing) {
         setIsDrawing(true);
@@ -662,7 +1073,7 @@ export default function ThermalViewer() {
     
     setCurrentTemp(temp);
 
-    if (isDrawing && currentRegion && (activeTool === 'rectangle' || activeTool === 'polygon')) {
+    if (isDrawing && currentRegion && (activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'polygon')) {
       setCurrentRegion((prevRegion) => {
         if (!prevRegion) return null;
         const updatedPoints = [...prevRegion.points.slice(0, -1), { x: canvasX, y: canvasY }];
@@ -698,6 +1109,49 @@ export default function ThermalViewer() {
         };
         addMarker(marker);
       }
+    } else if (activeTool === 'eraser') {
+      // Eraser: check if click is near any marker or inside any region
+      const clickThreshold = 10; // pixels
+      
+      // Check markers
+      const clickedMarker = markers.find(m => 
+        m.imageId === activeImage.id &&
+        Math.sqrt(Math.pow(m.x - canvasX, 2) + Math.pow(m.y - canvasY, 2)) < clickThreshold
+      );
+      
+      if (clickedMarker) {
+        removeMarker(clickedMarker.id);
+        console.log('[THERMAL_VIEWER] Marker removed:', clickedMarker.id);
+        return;
+      }
+      
+      // Check regions
+      const clickedRegion = regions.find(r => {
+        if (r.imageId !== activeImage.id) return false;
+        
+        if (r.type === 'rectangle' && r.points.length === 2) {
+          const [p1, p2] = r.points;
+          const minX = Math.min(p1.x, p2.x);
+          const maxX = Math.max(p1.x, p2.x);
+          const minY = Math.min(p1.y, p2.y);
+          const maxY = Math.max(p1.y, p2.y);
+          return canvasX >= minX && canvasX <= maxX && canvasY >= minY && canvasY <= maxY;
+        } else if (r.type === 'circle' && r.points.length === 2) {
+          const [center, edge] = r.points;
+          const radius = Math.sqrt(Math.pow(edge.x - center.x, 2) + Math.pow(edge.y - center.y, 2));
+          const distance = Math.sqrt(Math.pow(canvasX - center.x, 2) + Math.pow(canvasY - center.y, 2));
+          return distance <= radius;
+        } else if (r.type === 'polygon' && r.points.length >= 3) {
+          return isPointInPolygon({ x: canvasX, y: canvasY }, r.points);
+        }
+        return false;
+      });
+      
+      if (clickedRegion) {
+        removeRegion(clickedRegion.id);
+        console.log('[THERMAL_VIEWER] Region removed:', clickedRegion.id);
+        return;
+      }
     } else if (activeTool === 'polygon' && isDrawing && currentRegion) {
       // This adds a new point to the polygon for each click on the canvas
       // The very first point is initiated by handleContainerMouseDown
@@ -707,56 +1161,12 @@ export default function ThermalViewer() {
         return { ...prevRegion, points: [...prevRegion.points, { x: canvasX, y: canvasY }] };
       });
     }
-  }, [activeImage, activeTool, markers, addMarker, isDrawing, currentRegion, setCurrentRegion]);
+  }, [activeImage, activeTool, markers, regions, addMarker, removeMarker, removeRegion, isDrawing, currentRegion, setCurrentRegion, isPointInPolygon]);
 
   const handleMainCanvasMouseLeave = useCallback(() => {
       setCurrentTemp(null);
       // setMousePos({ x: 0, y: 0 }); // Optional: reset mousePos if needed
   }, [setCurrentTemp]);
-
-  const calculateRegionTemperatures = useCallback((thermalData: any, points: { x: number; y: number }[], type: string) => {
-    const temps: number[] = [];
-
-    if (type === 'rectangle' && points.length === 2) {
-      const [p1, p2] = points;
-      const minX = Math.floor(Math.min(p1.x, p2.x));
-      const maxX = Math.ceil(Math.max(p1.x, p2.x));
-      const minY = Math.floor(Math.min(p1.y, p2.y));
-      const maxY = Math.ceil(Math.max(p1.y, p2.y));
-
-      for (let y = minY; y <= maxY; y++) {
-        for (let x = minX; x <= maxX; x++) {
-          const temp = getTemperatureAtPixel(thermalData, x, y);
-          if (temp !== null) temps.push(temp);
-        }
-      }
-    }
-
-    if (temps.length === 0) return { min: 0, max: 0, avg: 0 };
-
-    return {
-      min: Math.min(...temps),
-      max: Math.max(...temps),
-      avg: temps.reduce((sum, temp) => sum + temp, 0) / temps.length
-    };
-  }, []);
-
-  const calculateRectangleArea = useCallback((points: { x: number; y: number }[]) => {
-    if (points.length !== 2) return 0;
-    const [p1, p2] = points;
-    return Math.abs((p2.x - p1.x) * (p2.y - p1.y));
-  }, []);
-
-  const calculatePolygonArea = useCallback((points: { x: number; y: number }[]) => {
-    if (points.length < 3) return 0;
-    let area = 0;
-    for (let i = 0; i < points.length; i++) {
-      const j = (i + 1) % points.length;
-      area += points[i].x * points[j].y;
-      area -= points[j].x * points[i].y;
-    }
-    return Math.abs(area) / 2;
-  }, []);
 
   const handleContainerMouseUp = useCallback(() => {
     setIsDragging(false);
@@ -791,6 +1201,43 @@ export default function ThermalViewer() {
       }
 
       addRegion(region);
+      setIsDrawing(false);
+      setCurrentRegion(null);
+    } else if (activeTool === 'circle' && isDrawing && currentRegion && currentRegion.points.length === 2 && activeImage) {
+      // Validate circle has non-zero radius
+      const [center, edge] = currentRegion.points;
+      const radius = Math.sqrt(Math.pow(edge.x - center.x, 2) + Math.pow(edge.y - center.y, 2));
+      
+      if (radius < 1) {
+        setIsDrawing(false);
+        setCurrentRegion(null);
+        return; // Ignore zero-radius circles
+      }
+
+      const region = {
+        id: generateId(),
+        type: 'circle' as const,
+        points: currentRegion.points,
+        minTemp: 0,
+        maxTemp: 0,
+        avgTemp: 0,
+        area: 0,
+        label: `Circle ${regions.length + 1}`,
+        emissivity: 0.95,
+        imageId: activeImage.id
+      };
+
+      // Calculate temperature statistics for the circle
+      if (activeImage.thermalData) {
+        const temps = calculateRegionTemperatures(activeImage.thermalData, currentRegion.points, 'circle');
+        region.minTemp = temps.min;
+        region.maxTemp = temps.max;
+        region.avgTemp = temps.avg;
+        region.area = Math.PI * radius * radius; // πr²
+      }
+
+      addRegion(region);
+      console.log('[THERMAL_VIEWER] Circle region added:', region);
       setIsDrawing(false);
       setCurrentRegion(null);
     }
@@ -856,6 +1303,7 @@ export default function ThermalViewer() {
       }
 
       addRegion(region);
+      console.log('[THERMAL_VIEWER] Polygon region added:', region);
       setIsDrawing(false);
       setCurrentRegion(null);
     }
@@ -875,6 +1323,7 @@ export default function ThermalViewer() {
     { id: 'rectangle', icon: Square, name: t.rectangle },
     { id: 'circle', icon: Circle, name: t.circle },
     { id: 'polygon', icon: Pentagon, name: t.polygon },
+    { id: 'eraser', icon: Eraser, name: 'پاک‌کن' },
     { id: 'isotherm', icon: Thermometer, name: t.isotherm },
   ];
 
@@ -997,15 +1446,15 @@ export default function ThermalViewer() {
             // setCurrentTemp(null); // Temperature is now tied to renderer hover
           }}
         >
-          {activeImage?.thermalData ? (
+          {activeImage && (activeImage.thermalData || activeImage.serverRenderedThermalUrl) ? (
             <div // This div will be scaled and panned
               className={cn(
                   activeTool === 'cursor' ? 'cursor-grab' : 'cursor-crosshair',
                   isDragging && activeTool === 'cursor' && 'cursor-grabbing'
               )}
               style={{
-                width: activeImage.thermalData.width,
-                height: activeImage.thermalData.height,
+                width: activeImage.thermalData?.width || mainCanvasRef.current?.width || 640,
+                height: activeImage.thermalData?.height || mainCanvasRef.current?.height || 480,
                 transform: `scale(${zoom}) translate(${panX / zoom}px, ${panY / zoom}px)`,
                 transformOrigin: '0 0',
                 position: 'relative', // For absolute positioning of overlays
@@ -1030,9 +1479,12 @@ export default function ThermalViewer() {
               {/* Keep the overlayCanvas for markers/regions if it's separate */}
               <canvas
                 ref={overlayCanvasRef}
-                width={activeImage.thermalData.width} // This should be fine, it's for overlay
-                height={activeImage.thermalData.height} // This should be fine, it's for overlay
                 className="absolute top-0 left-0 pointer-events-none"
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  height: '100%',
+                }}
               />
 
               {/* Loading Overlay on Canvas */}
@@ -1238,7 +1690,12 @@ export default function ThermalViewer() {
             {activeImage?.thermalData && ( // Only show coords if there's an image
               <span>X: {Math.round(mousePos.x)}, Y: {Math.round(mousePos.y)}</span>
             )}
-            {isDrawing && activeImage?.thermalData && ( // Only show drawing status if there's an image
+            {isDrawing && activeTool === 'polygon' && currentRegion && currentRegion.points.length >= 3 && (
+              <span className="text-yellow-400 font-bold">
+                🔷 چندضلعی: {currentRegion.points.length - 1} نقطه | Enter یا دوبار کلیک برای اتمام | Esc برای لغو
+              </span>
+            )}
+            {isDrawing && activeTool !== 'polygon' && activeImage?.thermalData && ( // Only show drawing status if there's an image
               <span className="text-yellow-400">Drawing {activeTool}...</span>
             )}
             {/* Show emissivity and reflected temperature from metadata */}

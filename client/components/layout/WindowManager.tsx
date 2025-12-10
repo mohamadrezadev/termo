@@ -24,10 +24,10 @@ export default function WindowManager({ children, mode = 'grid' }: WindowManager
     };
   }, [calculateGridLayout]);
 
-  // Floating mode - original behavior
+  // Floating mode - scrollable behavior
   if (mode === 'floating') {
     return (
-      <div className="absolute inset-0 overflow-auto bg-gray-900">
+      <div className="w-full h-full overflow-auto bg-background">
         <div className="relative min-w-[1400px] min-h-[900px] w-full h-full">
           {children}
         </div>
@@ -49,8 +49,8 @@ export default function WindowManager({ children, mode = 'grid' }: WindowManager
   const windowCount = openWindows.length;
   if (windowCount === 0) {
     return (
-      <div className="h-full w-full bg-gray-900 flex items-center justify-center">
-        <p className="text-gray-500">No windows open</p>
+      <div className="h-full w-full bg-background flex items-center justify-center">
+        <p className="text-muted-foreground">No windows open</p>
       </div>
     );
   }
@@ -59,9 +59,9 @@ export default function WindowManager({ children, mode = 'grid' }: WindowManager
   const rows = Math.ceil(windowCount / cols);
 
   return (
-    <div className="h-full w-full bg-gray-900 p-2 overflow-hidden">
+    <div className="h-full w-full bg-background p-3 overflow-hidden">
       <div 
-        className="grid gap-2 h-full w-full"
+        className="grid gap-3 h-full w-full"
         style={{
           gridTemplateColumns: `repeat(${cols}, 1fr)`,
           gridTemplateRows: `repeat(${rows}, 1fr)`
@@ -78,7 +78,7 @@ export default function WindowManager({ children, mode = 'grid' }: WindowManager
           
           // Always render child with gridMode prop
           return (
-            <div key={childId || index} className="min-h-0 min-w-0">
+            <div key={childId || index} className="min-h-0 min-w-0 overflow-hidden">
               {cloneElement(child as any, { gridMode: true })}
             </div>
           );

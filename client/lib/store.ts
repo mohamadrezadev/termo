@@ -98,6 +98,7 @@ export interface AppState {
   // Actions
   setLanguage: (language: Language) => void;
   toggleFullscreen: () => void;
+  setIsFullscreen: (isFullscreen: boolean) => void;
   setCurrentProject: (project: Project | null) => void;
   addProject: (project: Project) => void;
   saveProjectSnapshot: () => Promise<boolean>;
@@ -178,19 +179,37 @@ function collectStateData(state: AppState) {
 // Calculate window positions based on grid
 function calculateWindowPositions(
   windows: WindowState[], 
-  containerWidth: number = 1600, 
-  containerHeight: number = 900
+  containerWidth?: number, 
+  containerHeight?: number
 ): WindowState[] {
+  // استفاده از ابعاد واقعی صفحه
+  const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1920;
+  const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 1080;
+  
+  const actualWidth = containerWidth || viewportWidth;
+  const actualHeight = containerHeight || viewportHeight;
+  
   const openWindows = windows.filter(w => w.isOpen);
+  if (openWindows.length === 0) return windows;
+  
   const { cols, rows } = calculateOptimalGrid(openWindows.length);
   
-  const padding = 15; // افزایش فاصله بین پنجره‌ها
-  const headerHeight = 60; // ارتفاع هدر بیشتر برای جلوگیری از همپوشانی
-  const availableWidth = containerWidth - (padding * (cols + 1));
-  const availableHeight = containerHeight - headerHeight - (padding * (rows + 1));
+  const padding = 12;
+  const headerHeight = 50;
+  const minWindowWidth = 280;
+  const minWindowHeight = 200;
   
-  const windowWidth = Math.floor(availableWidth / cols);
-  const windowHeight = Math.floor(availableHeight / rows);
+  // محاسبه فضای موجود با در نظر گرفتن padding ها
+  const availableWidth = actualWidth - (padding * (cols + 1));
+  const availableHeight = actualHeight - headerHeight - (padding * (rows + 1));
+  
+  // محاسبه اندازه هر پنجره
+  let windowWidth = Math.floor(availableWidth / cols);
+  let windowHeight = Math.floor(availableHeight / rows);
+  
+  // اطمینان از حداقل اندازه
+  windowWidth = Math.max(windowWidth, minWindowWidth);
+  windowHeight = Math.max(windowHeight, minWindowHeight);
   
   return windows.map((window) => {
     if (!window.isOpen) return window;
@@ -202,12 +221,19 @@ function calculateWindowPositions(
     const x = padding + (col * (windowWidth + padding));
     const y = headerHeight + padding + (row * (windowHeight + padding));
     
+    // اطمینان از اینکه پنجره از صفحه خارج نمی‌شود
+    const maxX = actualWidth - windowWidth - padding;
+    const maxY = actualHeight - windowHeight - padding;
+    
     return {
       ...window,
-      position: { x, y },
+      position: { 
+        x: Math.min(x, maxX), 
+        y: Math.min(y, maxY) 
+      },
       size: { 
-        width: Math.max(windowWidth, window.id === 'thermal-viewer' ? 600 : 300), 
-        height: Math.max(windowHeight, window.id === 'data-table' ? 200 : 250) 
+        width: windowWidth,
+        height: windowHeight
       },
       gridPosition: { row, col }
     };
@@ -309,7 +335,7 @@ export const useAppStore = create<AppState>()(
       nextZIndex: 8,
       gridCols: 3,
       gridRows: 2,
-      layoutMode: 'grid',
+      layoutMode: 'floating',
       globalParameters: {
         emissivity: 0.95,
         ambientTemp: 20,
@@ -328,9 +354,27 @@ export const useAppStore = create<AppState>()(
         set({ language, isRTL: language === 'fa' });
       },
 
-      toggleFullscreen: () => set((state) => ({
-        isFullscreen: !state.isFullscreen
-      })),
+      setIsFullscreen: (isFullscreen) => {
+        set({ isFullscreen });
+      },
+
+      toggleFullscreen: () => {
+        const currentState = get().isFullscreen;
+        
+        if (!currentState) {
+          // Enter fullscreen
+          if (document.documentElement.requestFullscreen) {
+            document.documentElement.requestFullscreen();
+          }
+        } else {
+          // Exit fullscreen
+          if (document.exitFullscreen) {
+            document.exitFullscreen();
+          }
+        }
+        
+        set({ isFullscreen: !currentState });
+      },
 
       setCurrentProject: (project) => {
         set({ currentProject: project });
@@ -444,12 +488,15 @@ export const useAppStore = create<AppState>()(
             console.log('[STORE] State data:', stateData);
             
             // Restore complete state
+            // Find first valid image with data (prefer images with thermal data or real image)
+            const validImage = images.find(img => img.thermalData || img.realImage || img.serverRenderedThermalUrl) || images[0];
+            
             set({
               currentProject: project,
               images: images,
               markers: markers,
               regions: regions,
-              activeImageId: stateData?.activeImageId || images[0]?.id || null,
+              activeImageId: stateData?.activeImageId || validImage?.id || null,
               currentPalette: stateData?.currentPalette || 'iron',
               customMinTemp: stateData?.customMinTemp || null,
               customMaxTemp: stateData?.customMaxTemp || null,
@@ -563,27 +610,47 @@ export const useAppStore = create<AppState>()(
 
         try {
           console.log('[STORE] Saving project snapshot to database...');
-          const projectData = {
-            id: state.currentProject.id,
-            name: state.currentProject.name,
-            description: state.currentProject.notes,
-            operator: state.currentProject.operator,
-            company: state.currentProject.company,
-            images: state.images,
-            markers: state.markers,
-            regions: state.regions,
+          
+          // Collect complete state data for persistence
+          const stateData = {
             activeImageId: state.activeImageId,
             currentPalette: state.currentPalette,
             customMinTemp: state.customMinTemp,
             customMaxTemp: state.customMaxTemp,
-            parameters: state.globalParameters
+            globalParameters: state.globalParameters,
+            displaySettings: {
+              thermalView: state.thermalView,
+              realView: state.realView,
+              showGrid: state.showGrid,
+              showMarkers: state.showMarkers,
+              showRegions: state.showRegions,
+              showTemperatureScale: state.showTemperatureScale
+            },
+            windowLayout: {
+              windows: state.windows,
+              gridCols: state.gridCols,
+              gridRows: state.gridRows,
+              layoutMode: state.layoutMode
+            }
           };
 
-          // Call API to save
-          const { saveProject } = await import('./api-service');
-          const result = await saveProject(projectData);
+          console.log('[STORE] State data to save:', stateData);
+          console.log('[STORE] Images:', state.images.length);
+          console.log('[STORE] Markers:', state.markers.length);
+          console.log('[STORE] Regions:', state.regions.length);
+
+          // Use saveProjectToAPI for complete state persistence
+          const { saveProjectToAPI } = await import('./project-service');
+          const result = await saveProjectToAPI(
+            state.currentProject,
+            state.images,
+            state.markers,
+            state.regions,
+            false, // Not a new project
+            stateData
+          );
           
-          if (result) {
+          if (result.success) {
             // Update project state to mark as saved
             set((state) => ({
               currentProject: state.currentProject ? {
@@ -594,8 +661,10 @@ export const useAppStore = create<AppState>()(
             
             toast.success('Project saved successfully');
             return true;
+          } else {
+            toast.error(result.error || 'Failed to save project');
+            return false;
           }
-          return false;
         } catch (error) {
           console.error('[STORE] Failed to save project:', error);
           toast.error('Failed to save project');

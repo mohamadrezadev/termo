@@ -68,21 +68,21 @@ export default function Window({
   if (gridMode) {
     return (
       <div 
-        className={`bg-gray-800 border border-gray-600 rounded-lg shadow-lg overflow-hidden h-full flex flex-col ${
+        className={`bg-card border-2 border-primary/20 rounded-xl shadow-glow overflow-hidden h-full flex flex-col transition-all duration-300 hover:shadow-glow-lg hover:border-primary/40 ${
           isFullscreen ? 'fixed inset-0 z-[9999] rounded-none' : ''
         }`}
         style={isFullscreen ? {} : { zIndex: window.zIndex }}
       >
         {/* Window Header */}
-        <div className="flex items-center justify-between h-8 bg-gray-700 border-b border-gray-600 px-2">
-          <span className="text-sm font-medium text-gray-200 truncate">
+        <div className="flex items-center justify-between h-8 bg-gradient-to-r from-primary/10 to-secondary/10 border-b border-primary/20 px-2 backdrop-blur-sm">
+          <span className="text-sm font-semibold truncate bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
             {title}
           </span>
           <div className="flex items-center space-x-1">
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 w-6 p-0 hover:bg-gray-600"
+              className="h-6 w-6 p-0 hover:bg-primary/20 rounded-md transition-colors"
               onClick={handleFullscreen}
               title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
             >
@@ -91,7 +91,7 @@ export default function Window({
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 w-6 p-0 hover:bg-gray-600"
+              className="h-6 w-6 p-0 hover:bg-destructive/20 rounded-md transition-colors"
               onClick={handleClose}
             >
               <X className="w-3 h-3" />
@@ -110,17 +110,17 @@ export default function Window({
   // Floating mode rendering (draggable, resizable)
   if (isFullscreen) {
     return (
-      <div className="fixed inset-0 z-[9999] bg-gray-800 flex flex-col">
+      <div className="fixed inset-0 z-[9999] bg-card flex flex-col">
         {/* Window Header */}
-        <div className="flex items-center justify-between h-8 bg-gray-700 border-b border-gray-600 px-2">
-          <span className="text-sm font-medium text-gray-200 truncate">
+        <div className="flex items-center justify-between h-8 bg-muted/50 border-b border-border px-2">
+          <span className="text-sm font-medium truncate">
             {title}
           </span>
           <div className="flex items-center space-x-1">
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 w-6 p-0 hover:bg-gray-600"
+              className="h-6 w-6 p-0 hover:bg-accent"
               onClick={handleFullscreen}
               title="Exit Fullscreen"
             >
@@ -129,7 +129,7 @@ export default function Window({
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 w-6 p-0 hover:bg-gray-600"
+              className="h-6 w-6 p-0 hover:bg-accent"
               onClick={handleClose}
             >
               <X className="w-3 h-3" />
@@ -167,7 +167,7 @@ export default function Window({
         });
       }}
       onMouseDown={handleMouseDown}
-      className="bg-gray-800 border border-gray-600 rounded-lg shadow-2xl overflow-hidden"
+      className="bg-card border-2 border-primary/20 rounded-xl shadow-glow overflow-hidden transition-all duration-300 hover:shadow-glow-lg hover:border-primary/40"
       style={{ zIndex: window.zIndex }}
       enableResizing={{
         top: true,
@@ -190,15 +190,15 @@ export default function Window({
     >
       <div className="flex flex-col h-full">
         {/* Window Header */}
-        <div className="window-header flex items-center justify-between h-8 bg-gray-700 border-b border-gray-600 px-2 cursor-move">
-          <span className="text-sm font-medium text-gray-200 truncate">
+        <div className="window-header flex items-center justify-between h-8 bg-gradient-to-r from-primary/10 to-secondary/10 border-b border-primary/20 px-2 cursor-move backdrop-blur-sm">
+          <span className="text-sm font-semibold truncate bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
             {title}
           </span>
           <div className="flex items-center space-x-1">
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 w-6 p-0 hover:bg-gray-600"
+              className="h-6 w-6 p-0 hover:bg-primary/20 rounded-md transition-colors"
               onClick={handleFullscreen}
               title="Fullscreen"
             >
@@ -207,7 +207,7 @@ export default function Window({
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 w-6 p-0 hover:bg-gray-600"
+              className="h-6 w-6 p-0 hover:bg-destructive/20 rounded-md transition-colors"
               onClick={handleClose}
             >
               <X className="w-3 h-3" />

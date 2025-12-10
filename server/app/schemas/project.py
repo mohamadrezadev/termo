@@ -9,9 +9,9 @@ from app.schemas.region import RegionResponse
 
 class ProjectBase(BaseModel):
     name: str
-    operator: str
-    company: Optional[str] = None
-    notes: Optional[str] = None
+    operator: Optional[str] = ""
+    company: Optional[str] = ""
+    notes: Optional[str] = ""
 
 class ProjectCreate(ProjectBase):
     # State persistence fields for new projects

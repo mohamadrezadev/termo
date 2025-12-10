@@ -79,9 +79,20 @@ export async function createProject(projectData: {
   notes?: string;
 }): Promise<any> {
   try {
+    console.log('[API_SERVICE] Creating project with data:', projectData);
     const response = await apiClient.post('/projects', projectData);
+    console.log('[API_SERVICE] Project created successfully:', response.data);
     return response.data;
   } catch (error) {
+    console.error('[API_SERVICE] Create project failed:', error);
+    if (error instanceof AxiosError) {
+      console.error('[API_SERVICE] Error details:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+    }
     handleError(error, 'Create project');
   }
 }
@@ -106,6 +117,20 @@ export async function getProjects(): Promise<any[]> {
 export async function getProject(projectId: string): Promise<any> {
   try {
     const response = await apiClient.get(`/projects/${projectId}`);
+    console.log('[API_SERVICE] getProject response:', {
+      projectId,
+      hasImages: !!response.data?.images,
+      imagesCount: response.data?.images?.length,
+      firstImage: response.data?.images?.[0] ? {
+        name: response.data.images[0].name,
+        hasRealImagePath: !!response.data.images[0].real_image_path,
+        hasThermalImagePath: !!response.data.images[0].thermal_image_path,
+        realImagePathPreview: response.data.images[0].real_image_path?.substring(0, 50),
+        thermalImagePathPreview: response.data.images[0].thermal_image_path?.substring(0, 50),
+        hasServerPalettes: !!response.data.images[0].server_palettes,
+        serverPalettesKeys: response.data.images[0].server_palettes ? Object.keys(response.data.images[0].server_palettes) : []
+      } : null
+    });
     return response.data;
   } catch (error) {
     handleError(error, `Get project ${projectId}`);
@@ -641,9 +666,22 @@ export async function saveProject(projectData: ProjectPayload): Promise<SaveProj
  */
 export async function loadProject(projectId: string): Promise<LoadProjectResponse> {
   try {
+    console.log('[API] Loading project:', projectId);
     const response = await apiClient.get(`/projects/load/${projectId}`);
     
-    console.log('[API] Project loaded successfully:', response.data);
+    console.log('[API] Project loaded successfully. Response keys:', Object.keys(response.data));
+    console.log('[API] Response.data.images:', response.data.images?.length || 0);
+    if (response.data.images && response.data.images.length > 0) {
+      const firstImage = response.data.images[0];
+      console.log('[API] First image data:', {
+        name: firstImage.name,
+        hasRealImagePath: !!firstImage.real_image_path,
+        hasThermalImagePath: !!firstImage.thermal_image_path,
+        realImageIsBase64: firstImage.real_image_path?.startsWith('data:'),
+        thermalImageIsBase64: firstImage.thermal_image_path?.startsWith('data:')
+      });
+    }
+    
     // بکند پروژه را در response.data.project برمی‌گرداند
     if (response.data.project) {
       return response.data;

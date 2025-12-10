@@ -244,6 +244,9 @@ def save_project(project_data: Dict[str, Any]) -> bool:
 
 def load_project(project_id: str) -> Optional[Dict[str, Any]]:
     """Load project and all its data from database"""
+    from app.services.file_manager import FileManager
+    import base64
+    
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -262,23 +265,89 @@ def load_project(project_id: str) -> Optional[Dict[str, Any]]:
         # Load and update images
         cursor.execute('SELECT * FROM images WHERE project_id = ?', (project_id,))
         images = []
+        file_manager = FileManager()
+        
         for image_row in cursor.fetchall():
+            print(f"[LOAD_PROJECT] Processing image from DB: {image_row['name']}")
+            print(f"[LOAD_PROJECT] Real image URL: {image_row['real_image_url']}")
+            print(f"[LOAD_PROJECT] Server rendered URL: {image_row['server_rendered_url']}")
+            print(f"[LOAD_PROJECT] Server palettes: {image_row['server_palettes']}")
+            
             # Parse metadata and normalize field names
             metadata = json.loads(image_row['metadata']) if image_row['metadata'] else {}
             # Convert snake_case to camelCase for client compatibility
             if 'reflected_temp' in metadata and 'reflectedTemp' not in metadata:
                 metadata['reflectedTemp'] = metadata.pop('reflected_temp')
             
+            # Convert file paths to base64
+            real_image_base64 = image_row['real_image_url']
+            if real_image_base64 and not real_image_base64.startswith('data:'):
+                try:
+                    real_path = file_manager.get_file_path(real_image_base64)
+                    print(f"[LOAD_PROJECT] Real image path resolved to: {real_path}")
+                    if real_path and real_path.exists():
+                        with open(real_path, 'rb') as f:
+                            real_data = f.read()
+                            real_b64 = base64.b64encode(real_data).decode('utf-8')
+                            ext = real_path.suffix.lower()
+                            mime_type = 'image/jpeg' if ext in ['.jpg', '.jpeg'] else 'image/png' if ext == '.png' else 'image/bmp'
+                            real_image_base64 = f'data:{mime_type};base64,{real_b64}'
+                            print(f"[LOAD_PROJECT] Real image converted to base64: {len(real_b64)} bytes")
+                except Exception as e:
+                    print(f"[LOAD_PROJECT] Error loading real image: {e}")
+                    real_image_base64 = None
+            
+            thermal_image_base64 = image_row['server_rendered_url']
+            if thermal_image_base64 and not thermal_image_base64.startswith('data:'):
+                try:
+                    thermal_path = file_manager.get_file_path(thermal_image_base64)
+                    print(f"[LOAD_PROJECT] Thermal image path resolved to: {thermal_path}")
+                    if thermal_path and thermal_path.exists():
+                        with open(thermal_path, 'rb') as f:
+                            thermal_data = f.read()
+                            thermal_b64 = base64.b64encode(thermal_data).decode('utf-8')
+                            ext = thermal_path.suffix.lower()
+                            mime_type = 'image/jpeg' if ext in ['.jpg', '.jpeg'] else 'image/png' if ext == '.png' else 'image/bmp'
+                            thermal_image_base64 = f'data:{mime_type};base64,{thermal_b64}'
+                            print(f"[LOAD_PROJECT] Thermal image converted to base64: {len(thermal_b64)} bytes")
+                except Exception as e:
+                    print(f"[LOAD_PROJECT] Error loading thermal image: {e}")
+                    thermal_image_base64 = None
+            
+            # Convert server palettes to base64
+            server_palettes_dict = json.loads(image_row['server_palettes']) if image_row['server_palettes'] else {}
+            converted_palettes = {}
+            for palette_name, palette_path in server_palettes_dict.items():
+                if palette_path and not palette_path.startswith('data:'):
+                    try:
+                        p_path = file_manager.get_file_path(palette_path)
+                        if p_path and p_path.exists():
+                            with open(p_path, 'rb') as f:
+                                p_data = f.read()
+                                p_b64 = base64.b64encode(p_data).decode('utf-8')
+                                ext = p_path.suffix.lower()
+                                mime_type = 'image/jpeg' if ext in ['.jpg', '.jpeg'] else 'image/png' if ext == '.png' else 'image/bmp'
+                                converted_palettes[palette_name] = f'data:{mime_type};base64,{p_b64}'
+                                print(f"[LOAD_PROJECT] Palette '{palette_name}' converted to base64")
+                    except Exception as e:
+                        print(f"[LOAD_PROJECT] Error loading palette {palette_name}: {e}")
+                else:
+                    converted_palettes[palette_name] = palette_path
+            
             image = {
                 'id': image_row['id'],
                 'name': image_row['name'],
                 'thermalData': json.loads(image_row['thermal_data']) if image_row['thermal_data'] else None,
-                'realImage': image_row['real_image_url'],
-                'serverRenderedThermalUrl': image_row['server_rendered_url'],
-                'serverPalettes': json.loads(image_row['server_palettes']) if image_row['server_palettes'] else {},
+                'realImage': real_image_base64,
+                'serverRenderedThermalUrl': thermal_image_base64,
+                'serverPalettes': converted_palettes,
                 'csvUrl': image_row['csv_url'],
                 'metadata': metadata
             }
+            print(f"[LOAD_PROJECT] Image '{image_row['name']}' loaded:")
+            print(f"  - Real image: {'base64' if real_image_base64 and real_image_base64.startswith('data:') else real_image_base64}")
+            print(f"  - Thermal image: {'base64' if thermal_image_base64 and thermal_image_base64.startswith('data:') else thermal_image_base64}")
+            print(f"  - Palettes: {list(converted_palettes.keys())}")
             images.append(image)
         project_data['images'] = images
         

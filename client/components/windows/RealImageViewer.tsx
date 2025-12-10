@@ -40,6 +40,12 @@ export default function RealImageViewer() {
   useEffect(() => {
     if (activeImage) {
       console.log(`[REAL_IMG_VIEWER] Attempting to render real image. Active image ID: ${activeImage.id}, RealImage URL: ${activeImage.realImage}`);
+      if (activeImage.realImage) {
+        const isBase64 = activeImage.realImage.startsWith('data:');
+        console.log(`[REAL_IMG_VIEWER] Real image is base64: ${isBase64}, Length: ${activeImage.realImage.length}`);
+      } else {
+        console.log('[REAL_IMG_VIEWER] No real image URL available');
+      }
     } else {
       console.log(`[REAL_IMG_VIEWER] No active image, so no real image to render.`);
     }

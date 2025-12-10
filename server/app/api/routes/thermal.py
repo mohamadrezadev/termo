@@ -116,26 +116,34 @@ def normalize_metadata(raw_metadata: dict) -> dict:
 
 
 @router.post("")
-async def upload_bmt(file: UploadFile, project_name: str = Form(...)):
+async def upload_bmt(file: UploadFile, project_id: str = Form(...)):
     """
     Upload and process BMT thermal imaging file
+    Only ONE BMT file per project is allowed.
 
     Args:
         file: BMT file to process
-        project_name: Name of the project
+        project_id: ID of the project
 
     Returns:
         JSON response with extracted images, CSV, and JSON data
     """
+    
+    logger.info(f"=== UPLOAD_BMT STARTED ===")
+    logger.info(f"File: {file.filename}")
+    logger.info(f"Project ID received: {project_id}")
+    logger.info(f"Project ID type: {type(project_id)}")
 
     # Validate file extension
     if not file.filename:
+        logger.error("No filename provided")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No filename provided"
         )
 
     if not file.filename.lower().endswith('.bmt'):
+        logger.error(f"Invalid file type: {file.filename}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only .BMT files are supported"
@@ -145,12 +153,67 @@ async def upload_bmt(file: UploadFile, project_name: str = Form(...)):
     validate_extractor()
 
     try:
-        # ایجاد دایرکتوری پروژه
-        project_id = project_name
-        project_path = PROJECTS_DIR / project_id
+        # Check if project exists in database
+        from sqlmodel import Session, select
+        from app.db.session import engine
+        from app.models.project import Project
+        from app.models.image import ThermalImage
+        from uuid import UUID
+        
+        logger.info(f"[UPLOAD_BMT] Starting upload for project_id: {project_id}")
+        logger.info(f"[UPLOAD_BMT] File: {file.filename}")
+        
+        with Session(engine) as db:
+            try:
+                project_uuid = UUID(project_id)
+                logger.info(f"[UPLOAD_BMT] Parsed project UUID: {project_uuid}")
+            except ValueError as e:
+                logger.error(f"[UPLOAD_BMT] Invalid UUID format: {project_id}, error: {e}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid project ID format: {str(e)}"
+                )
+            
+            project = db.get(Project, project_uuid)
+            if not project:
+                logger.error(f"[UPLOAD_BMT] Project not found: {project_uuid}")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Project with ID {project_id} not found"
+                )
+            
+            logger.info(f"[UPLOAD_BMT] Found project: {project.name}")
+            
+            # Check if project already has a BMT file (thermal image)
+            existing_images = db.exec(
+                select(ThermalImage).where(ThermalImage.project_id == project_uuid)
+            ).all()
+            
+            logger.info(f"[UPLOAD_BMT] Found {len(existing_images)} existing images")
+            
+            if existing_images:
+                logger.warning(f"[UPLOAD_BMT] Project already has images, rejecting upload")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="این پروژه قبلاً یک فایل BMT دارد. فقط یک فایل BMT در هر پروژه مجاز است."
+                )
+        
+        # Create project directory using project name
+        from app.services.file_manager import FileManager
+        file_manager = FileManager()
+        sanitized_name = FileManager.sanitize_folder_name(project.name)
+        project_path = PROJECTS_DIR / sanitized_name
         project_path.mkdir(parents=True, exist_ok=True)
 
-        # ذخیره فایل آپلود شده
+        # Check if BMT file already exists
+        existing_bmt = list(project_path.glob("*.bmt"))
+        if existing_bmt:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="یک فایل BMT قبلاً برای این پروژه آپلود شده است. لطفاً ابتدا فایل قبلی را حذف کنید."
+            )
+
+        # Save uploaded file
         bmt_path = project_path / file.filename
         logger.info(f"Saving BMT file to: {bmt_path}")
 
@@ -335,6 +398,27 @@ async def upload_bmt(file: UploadFile, project_name: str = Form(...)):
 
         logger.info(f"Processing complete: {len(images)} images, {len(csv_files)} CSV, {len(json_files)} JSON")
         logger.info(f"Images in response: {[img.get('name', img.get('type')) for img in images]}")
+
+        # Save images to database
+        with Session(engine) as db:
+            # Save visual image
+            visual_image = next((img for img in images if img.get('type') == 'real'), None)
+            
+            # Save thermal images
+            for thermal_img in thermal_images:
+                thermal_image = ThermalImage(
+                    project_id=project_uuid,
+                    name=thermal_img['name'],
+                    real_image_path=visual_image['url'] if visual_image else None,
+                    thermal_image_path=None,  # We don't have a single thermal path
+                    server_palettes=thermal_img.get('palettes', {}),
+                    csv_url=thermal_img.get('csv_url'),
+                    thermal_data=thermal_img.get('metadata', {})
+                )
+                db.add(thermal_image)
+            
+            db.commit()
+            logger.info(f"Saved {len(thermal_images)} thermal images to database")
 
         return {
             "status": "success",
@@ -542,8 +626,25 @@ async def rerender_with_palette(
         output_dir = project_path / "output"
         output_dir.mkdir(exist_ok=True)
 
-        # اجرای C# extractor برای تولید تصویر با پالت جدید
-        logger.info(f"Running C# extractor with palette: {palette} using {selected_bmt_path}")
+        # ابتدا چک کنیم که آیا فایل پالت از قبل وجود دارد
+        thermal_pattern = f"*_thermal_{palette}.png"
+        existing_thermal_files = list(output_dir.glob(thermal_pattern))
+        
+        if existing_thermal_files:
+            # فایل پالت از قبل وجود دارد، از همان استفاده می‌کنیم
+            logger.info(f"Found existing palette file: {existing_thermal_files[0].name}")
+            thermal_url = url_path(existing_thermal_files[0], add_timestamp=True)
+            
+            return {
+                "status": "success",
+                "thermal_url": thermal_url,
+                "palette": palette,
+                "project_id": project_id,
+                "from_cache": True
+            }
+
+        # اگر فایل وجود ندارد، C# extractor را اجرا می‌کنیم
+        logger.info(f"Palette file not found, running C# extractor with palette: {palette} using {selected_bmt_path}")
 
         try:
             process = subprocess.run(
@@ -602,7 +703,8 @@ async def rerender_with_palette(
             "status": "success",
             "thermal_url": thermal_url,
             "palette": palette,
-            "project_id": project_id
+            "project_id": project_id,
+            "from_cache": False
         }
         
     except HTTPException:

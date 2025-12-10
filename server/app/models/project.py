@@ -11,7 +11,7 @@ class Project(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     name: str = Field(index=True)
-    operator: str
+    operator: str = Field(default="")
     company: Optional[str] = None
     date: datetime = Field(default_factory=datetime.utcnow)
     notes: Optional[str] = None

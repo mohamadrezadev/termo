@@ -27,6 +27,7 @@ export const translations = {
     parameters: "Parameters",
     timeline: "Timeline",
     reports: "Reports",
+    reportEditor: "Report Editor",
     resetLayout: "Reset Layout",
     
     // Measurement Tools
@@ -176,11 +177,12 @@ export const translations = {
     // Window Management
     thermalViewer: "نمایشگر حرارتی",
     realImageViewer: "نمایشگر تصویر واقعی",
-    dataTable: "جدول داده‌ها",
+    dataTable: "جدول داده",
     histogram: "هیستوگرام",
     parameters: "پارامترها",
-    timeline: "جدول زمانی",
+    timeline: "خط زمان",
     reports: "گزارش‌ها",
+    reportEditor: "ویرایشگر گزارش",
     resetLayout: "بازنشانی چیدمان",
     
     // Measurement Tools
